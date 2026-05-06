@@ -1,0 +1,14 @@
+[project]
+name = "rssda"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "brahe>=1.3.1",
+    "numpy>=1.20.0",
+    "numba>=0.50.0",
+    "psutil>=5.0.0",
+    "pandas>=1.0.0",
+    "scipy>=1.17.1",
+]
