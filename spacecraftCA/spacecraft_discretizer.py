@@ -3,11 +3,15 @@ spacecraft_discretizer.py
 
 State = (miss_distance_bin, stage)
   miss_distance: predicted miss at TCA, discretized into 6 bins (km)
-  stage: planning stage index (0 = first contact, 5 = last before TCA)
+  stage: planning stage index (0 = T-24h, 29 = T-1h before TCA)
 
-Total states: 6 bins * 6 stages + 1 sink = 37
-  Indices 0..35: (miss_bin, stage) states  -> flat index = stage * N_MISS + miss_bin
-  Index 36: sink (absorbing terminal state)
+Stages: 16 total — 10 ~2h grid points (T-24h, T-22h, ..., T-10h, T-4h, T-2h)
+  plus 6 GS contact windows inserted at their exact times. Contact stages are
+  sync points; all others are always-decentralized decision points.
+
+Total states: 6 bins * 16 stages + 1 sink = 97
+  Indices 0..95: (miss_bin, stage) states  -> flat index = stage * N_MISS + miss_bin
+  Index 96: sink (absorbing terminal state)
 """
 
 import numpy as np
@@ -19,10 +23,10 @@ from typing import List, Tuple
 
 MISS_EDGES_KM = [0, 1, 5, 20, 100, 500, float('inf')]  # 6 bins
 N_MISS = 6
-N_STAGES = 6
-N_STATES = N_MISS * N_STAGES        # 36
-N_STATES_TOTAL = N_STATES + 1       # 37 (index 36 = sink)
-SINK_STATE = N_STATES               # 36
+N_STAGES = 16
+N_STATES = N_MISS * N_STAGES        # 96
+N_STATES_TOTAL = N_STATES + 1       # 97 (index 96 = sink)
+SINK_STATE = N_STATES               # 96
 
 _MISS_EDGES = np.array([0, 1, 5, 20, 100, 500], dtype=float)  # left edges only
 
@@ -90,7 +94,7 @@ def print_summary():
     print("Miss-Distance Discrete State Space")
     print("=" * 55)
     print(f"  N_MISS         = {N_MISS}")
-    print(f"  N_STAGES       = {N_STAGES}")
+    print(f"  N_STAGES       = {N_STAGES}  (10 ~2h grid points + 6 GS contacts)")
     print(f"  N_STATES       = {N_STATES}  (non-sink)")
     print(f"  N_STATES_TOTAL = {N_STATES_TOTAL}  (+ sink at {SINK_STATE})")
     print()
@@ -124,4 +128,4 @@ if __name__ == "__main__":
         print(f"  {d:>10.1f} km -> bin {miss_to_bin(d)}")
 
     print()
-    print(f"sync_trigger_states([0,1,2,3,4,5]) = {len(sync_trigger_states(list(range(N_STAGES))))} states (all non-sink)")
+    print(f"sync_trigger_states(all) = {len(sync_trigger_states(list(range(N_STAGES))))} states (all non-sink)")

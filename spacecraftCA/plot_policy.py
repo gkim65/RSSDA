@@ -109,15 +109,23 @@ def read_stage0_action(full_result, mode="cen"):
 
 
 def build_grid(T, O, R, contact_stages, mode="cen"):
-    """Build (N_MISS, N_STAGES) grids of action labels and policy values."""
+    """Build (N_MISS, N_STAGES) grids of action labels and policy values.
+
+    For decentralized mode, solves with contact_stages=[] so RSSDA populates
+    the decentralized branch at step 0 (otherwise it's never computed because
+    all states are sync states and step 0 is always centralized).
+    """
     label_grid = np.full((N_MISS, N_STAGES), "N/A", dtype=object)
     value_grid = np.zeros((N_MISS, N_STAGES))
+
+    # Decentralized solve must use no contact stages so step 0 is dec-only
+    solve_stages = [] if mode == "dec" else contact_stages
 
     for stage in range(N_STAGES):
         for mb in range(N_MISS):
             print(f"  Solving (bin={mb}, stage={stage})...", end="\r", flush=True)
             try:
-                full_result, _ = solve_from_state(T, O, R, contact_stages, mb, stage)
+                full_result, _ = solve_from_state(T, O, R, solve_stages, mb, stage)
                 ja, val = read_stage0_action(full_result, mode=mode)
                 label_grid[mb, stage] = joint_action_label(ja)
                 value_grid[mb, stage] = val

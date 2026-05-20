@@ -45,16 +45,20 @@ def build_model(T, O, R, init_b, contact_stages):
     sync_states = sync_trigger_states(contact_stages)
     if SINK_STATE not in sync_states:
         sync_states = sorted(sync_states + [SINK_STATE])
+    # Infer action space from T shape (supports 9-action and 36-action variants)
+    n_joint_acts = T.shape[0]
+    import math
+    n_act_agent = int(round(math.sqrt(n_joint_acts)))
     model = SDecPOMDPModel(
         nagents=2,
         nstates=N_STATES_TOTAL,
-        nactions=N_JOINT_ACTIONS,
+        nactions=n_joint_acts,
         nobs=N_JOINT_OBS,
         transitions=T.flatten().tolist(),
         obs=O.flatten().tolist(),
         rewards=R.flatten().tolist(),
         init_beliefs=init_b.tolist(),
-        nacts_factor=[N_ACT_AGENT, N_ACT_AGENT],
+        nacts_factor=[n_act_agent, n_act_agent],
         nobs_factor=[N_OBS_AGENT, N_OBS_AGENT],
         sync_states=sync_states,
         sync_actions=[],

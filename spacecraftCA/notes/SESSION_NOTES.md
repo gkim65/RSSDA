@@ -1,5 +1,5 @@
 # Spacecraft CA SDec-POMDP — Session Notes
-_Last updated: 2026-05-03 (Session 3)_
+_Last updated: 2026-05-20 (Session 6)_
 
 ---
 
@@ -321,6 +321,115 @@ Run it and report results in the next session.
 
 ---
 
+## Session 5 Design Decisions (2026-05-05)
+
+### Why All 3 Variants Are Identical — Root Cause Identified
+
+The core problem: miss distance alone doesn't distinguish *when* a maneuver happened.
+A burn at stage 0 (T-23h) and a burn at stage 5 (T-1h) can both move the spacecraft
+to the same miss bin, but the stage-0 burn leaves the spacecraft 128 km off its
+nominal trajectory for 23 hours while the stage-5 burn deviates only ~8 km.
+The policy has no incentive to prefer late burns — it just burns at stage 0 and parks.
+
+### Deviation-from-Nominal State Dimension — DECIDED
+
+Expand state from (miss_bin, stage) → (miss_bin, SC1_dev_bin, SC2_dev_bin, stage).
+
+**Deviation definition:** along-track distance (|dT| in RTN) between the spacecraft's
+current TCA-projected position and its nominal (no-burn) TCA position. Computed by
+propagating current ECI state to TCA and comparing to precomputed nominal.
+
+**Key insight:** only one Brahe propagation needed per (state, action) in T build —
+same structure as current code, just measuring two things (miss + deviation) instead
+of one. Nominal trajectories precomputed once at build time.
+
+**Deviation bins (4 per spacecraft), motivated by actual Brahe runs at 6 stages:**
+```
+bin 0: [0, 2) km     — no burn / negligible
+bin 1: [2, 20) km    — late burn (stage 4-5)
+bin 2: [20, 60) km   — mid burn (stages 1-3)
+bin 3: [60+) km      — early burn (stage 0)
+```
+Single-burn deviations at each stage: S0=128km, S1=52km, S2=43km, S3=35km, S4=17km, S5=8km
+Two burns: 136-180 km. Three burns: 187-223 km.
+
+New state space: 6 x 4 x 4 x 6 + 1 sink = **577 states**
+
+**Reward addition:** per-stage deviation penalty at non-terminal stages:
+  R_dev(s, a) -= alpha * (SC1_dev_bin + SC2_dev_bin)
+This discourages parking in a high-deviation state for many stages.
+
+**Reference plot:** `examples/plot_deviation_vs_burn_time.py` → `notes/figures/deviation_vs_burn_time.png`
+Shows ~linear relationship between burn time and along-track deviation (0–130 km over 24h).
+
+### Bin Choice Depends on Timestep Spacing — NOTED
+
+With 6 unevenly-spaced contact stages, deviations cluster at the low end
+(most stages are near TCA) → 4 log-ish bins is appropriate.
+
+If intermediate non-contact timesteps are added (evenly spaced), deviations
+spread more uniformly → uniform bins make more sense, and bin 3 should be
+split into two (5 bins total). Revisit when adding intermediate timesteps.
+
+### Asymmetric Observation Model — IMPLEMENTED (session 5)
+
+Changed `build_matrices()` in `spacecraft_matrices.py` to give each agent
+a different observation distribution based only on *its own* maneuver:
+
+- SC1 observes miss distance as if only SC1 burned (SC2 stays on nominal)
+- SC2 observes miss distance as if only SC2 burned (SC1 stays on nominal)
+- At sync points agents share beliefs and reconcile
+
+Implementation: two extra Brahe propagations per (state, action):
+  `sc1_no_burn_tca` and `sc2_no_burn_tca` (nominal trajectories precomputed)
+  p_obs1 = obs_distribution(miss_sc1_view)
+  p_obs2 = obs_distribution(miss_sc2_view)
+  p_joint = np.outer(p_obs1, p_obs2).flatten()
+
+When both agents WAIT, views are identical — no change from symmetric case.
+Asymmetry only kicks in when one burns and the other doesn't.
+
+Results after change (10 rollouts, init bin 0):
+  Centralized: 127.76km, Decentralized: 128.01km, SDec: 127.76km
+  Tiny difference appearing but variants still effectively identical.
+  Confirms deviation tracking is needed to create real differentiation.
+
+Propagator note: two-body Brahe (ForceModelConfig.two_body()) — no J2,
+no drag. Sufficient for first model; J2 is obvious future work for LEO.
+
+### Task Ordering — DECIDED
+
+1. Deviation tracking first (validates reward signal, makes problem interesting)
+2. Intermediate non-contact timesteps second (adds richer sequential decisions)
+3. Scenario 3 sync fix third (sweep is more meaningful once policy has real tradeoffs)
+
+Reason for this order: sync fix is wasted if policy still trivially burns at stage 0.
+Deviation tracking + intermediate steps create the conditions where coordination
+timing actually matters and SDec produces meaningfully different results.
+
+### Sync Fix Design — DISCUSSED, NOT YET IMPLEMENTED
+
+Options reviewed:
+- sync_actions: designate joint action indices as "communicate" triggers (FireFight/Tiger pattern)
+- sync_observations: certain obs trigger centralization (Labyrinth pattern)
+- sync_states subset: mark only some stages as sync triggers (current approach, weakest)
+
+Recommendation: sync_actions, with sync_states=[]. Ask repo author for guidance.
+See benchmarks/sdec_fireFight3houses.py and benchmarks/sdec_tiger.py for examples.
+
+### State Space Size Rejected — Deviation-in-State vs. Deviation-in-Reward
+
+Considered tracking deviation as a continuous reward penalty without adding it
+to the state. Rejected because: the policy needs to *observe* how far it has
+drifted to make good future decisions. Without deviation in the state, the agent
+can't condition on whether it already burned early and should stop.
+
+Considered full burn-history in state. Rejected: the current ECI state already
+encodes all past maneuvers implicitly — deviation bin captures the net effect
+without needing to store the full history.
+
+---
+
 ## Session 4 Accomplishments (2026-05-05)
 
 ### Completed
@@ -348,6 +457,139 @@ Centralized      1          0.0   127.895        0.5000        6.0
 Decentralized    1          0.0   128.090        0.5000        0.0
 SDec (contacts)  1          0.0   127.895        0.5000        6.0
 ```
+
+---
+
+## Session 6 Accomplishments (2026-05-20)
+
+### Three-Variant Matrix Architecture — IMPLEMENTED
+
+Replaced single-variant T/O/R with three separate cached files:
+- `spacecraft_matrices_cache_centralized.npz` — 9 joint actions (3×3 burns), GPS obs forced at contacts
+- `spacecraft_matrices_cache_sdec.npz` — 36 joint actions (6×6: burn × sync_flag per agent), optional sync
+- `spacecraft_matrices_cache_dec.npz` — 9 joint actions (3×3 burns), TLE obs at contacts (no sync)
+
+Per-variant cache: `cache_path(variant)` helper, `build_matrices(variant=...)`, `load_matrices(variant=...)`.
+
+### Action Space Redesign — IMPLEMENTED
+
+Per-agent action encoding for SDec:
+```
+a_i = sync_flag * N_BURN_AGENT + burn_i
+burn_i  = a_i % N_BURN_AGENT   # 0=WAIT, 1=POS, 2=NEG
+sync_i  = a_i // N_BURN_AGENT  # 0=no-sync, 1=sync
+```
+`decode_agent_action(a_i)` helper added. SDec has 6 per-agent actions × 6 = 36 joint actions.
+Centralized and Dec still use 9 (no sync flag in action space).
+
+### Asymmetric GPS/TLE Observation Model — CORRECTED AND VARIANT-AWARE
+
+New physically correct per-variant obs model at contact stages:
+- **Centralized**: always GPS (σ=0.1 km) — shared precise obs, forced sync
+- **SDec**: GPS (σ=0.1 km) only when BOTH agents select sync_flag=1 at a contact stage
+- **Dec**: TLE (σ=3 km) always at contacts — coarse knowledge of other spacecraft burn
+- **Non-contact (all variants)**: asymmetric TLE obs (each agent sees miss from own-burns-only view)
+
+Between contacts each agent knows its own burn exactly but observes the other spacecraft
+via TLE noise — only asymmetric burns create meaningfully different per-agent views.
+
+### Stochastic Transition Model — ENABLED
+
+`EXEC_NOISE_SIGMA = 0.50` (±50% 1-sigma execution noise) — found via sweep:
+- σ=0.15: deterministic (bin widths too wide, all transitions are point-mass)
+- σ=0.30: minimal spread (~1% probability in neighboring bins)
+- σ=0.50: meaningful spread (roughly 60/30/10 split across adjacent bins)
+- σ=1.00: very spread (5+ bins affected)
+
+Noise applied multiplicatively: `miss_noisy = miss_deterministic * (1 + ε)` where `ε ~ N(0, σ²)`.
+Averaged over 50 ε samples per (state, action). Only applied when at least one agent maneuvers.
+Propagator loop iterates 9 unique burn combos (not 36) — sync flag doesn't affect dynamics.
+
+### Strong Terminal Penalties — ADDED
+
+```python
+REWARD_COLLISION = -10000.0   # bin 0: <1 km at TCA
+REWARD_HIGH      =  -1000.0   # bin 1: 1-5 km at TCA
+REWARD_MOD       =   -100.0   # bin 2: 5-20 km at TCA
+SYNC_COST        =    -0.5    # per joint sync at a contact stage
+SYNC_OUTSIDE_COST =  -0.05   # per sync attempt outside contact
+```
+
+These were needed because with spread initial belief (bins 0-2 uniform) the old flat
+penalties made "do nothing" look optimal (expected cost too low).
+
+### Spread Initial Belief — ADDED
+
+`make_init_b_for_bin(bin_idx, spread=True)` spreads belief uniformly over bins 0, 1, 2
+to model an uncertain conjunction scenario (don't know exact risk level at T-24h).
+Previously: point mass on a single bin.
+
+### Simulator Fixes — DONE
+
+- `rollout_rssda` and `rollout_greedy` both get `force_sync: bool = False` parameter
+- Centralized: `force_sync=True` forces GPS obs at contact stages regardless of action
+- Dec: always generates TLE obs at contacts (not "nothing" as before)
+- SDec: TLE obs at contacts unless both agents chose sync_flag=1
+- `apply_maneuver` calls use `burn1, burn2 = decode_agent_action(a1, a2)` (not raw action)
+- Belief advancement uses dict lookup instead of linear scan (faster)
+- `summarize` tracks `sync_outside_contact` count; `print_summary` shows `(outside contact: X.X)`
+
+### sdec_spacecraft.py Fix — DONE
+
+`build_model` now infers action space from T matrix shape:
+```python
+n_joint_acts = T.shape[0]
+n_act_agent = int(round(math.sqrt(n_joint_acts)))
+```
+Previously hardcoded `N_JOINT_ACTIONS=9`, which caused a reshape error for the 36-action SDec matrix.
+
+### Session 6 Comparison Results (5 rollouts, spread belief bins 0-2, σ=0.50, dv=0.5 m/s)
+
+```
+Scenario               Init bin   Coll%  Mean miss(km)  Mean dv(m/s)  Mean syncs
+Centralized            0            0.0          19.284         1.000         6.0
+Decentralized          0            0.0          64.668         1.500         0.0
+SDec (contacts)        0            0.0           8.526         1.000         0.0
+Centralized            1            0.0         129.352         0.500         6.0
+Decentralized          1            0.0         456.663         5.500         0.0
+SDec (contacts)        1            0.0           9.109         1.000         0.0
+```
+
+**Key findings:**
+- Centralized finds efficient policy (1 m/s dv → MOD ~19km from spread-bin-0 belief)
+- SDec achieves similar dv to centralized but lower miss distance — burns from stage 0
+  before any contact (no sync), so policy is committed before belief can be refined
+- Dec: without shared belief collapse, policy is overcautious (burns all three stages,
+  5.5 m/s from bin 1) — demonstrates computational case for SDec
+- Dec OOMs at σ=0.50 with spread belief (7GB+): without sync states the belief tree
+  cannot collapse → exponential node growth. This is a key paper result.
+- SDec syncs=0 for all rollouts: policy burns at stage 0 (before first contact at T-23h),
+  so sync at stage 1 has no future decision to inform. Timing problem, not cost level.
+
+### Why Dec OOMs — Root Cause
+
+Without sync states, Dec has no belief tree collapse mechanism. At σ=0.50 with spread
+belief, the tree fans out exponentially. Centralized stays tractable because GPS obs at
+contacts sharply collapses beliefs to near-point masses. This result motivates why SDec
+(optional sync) exists as a computational and physical design choice.
+
+### Why SDec Never Syncs — Root Cause
+
+The first GS contact is at stage 1 (T-23.39h → index 1 in the 16-stage schedule).
+Stage 0 is T-24h — no contact. The policy burns at stage 0, commits to a trajectory,
+and then sync at stage 1 can't change the decision already made. The sync would need
+to happen before the critical maneuver to be useful.
+
+Fix path: stage-dependent maneuver cost (next session) — make burns expensive early
+and cheap late to incentivize waiting for a contact before committing.
+
+### Known Issues / Limitations
+
+- `N_ACT_AGENT` module-level constant is still 3 (used in `split_joint_action`), which
+  is wrong for SDec's 6-per-agent actions. The comparison loop passes per-variant T matrices
+  correctly, but any code using `split_joint_action` on SDec actions will decode wrong.
+- `--fixed-init` trajectory tree mode needs updating for 3-variant structure
+- SDec never exercises sync in rollouts — policy is not meaningfully differentiated from Dec
 
 ---
 
@@ -389,7 +631,23 @@ cd spacecraftCA/notes/slides && pdflatex slides.tex
 
 ## Immediate Next Steps
 
-1. **Scenario 3 structural fix** — sync must be a *choice*, not automatic. Options:
+1. **Fast rollout mode using cached ECI states** — HIGH PRIORITY before running experiments.
+   Current simulator re-propagates to TCA at every stage to measure true miss (~4 Brahe
+   calls/stage × 16 stages × 100 rollouts = ~6,400 integrations, ~15 min). Two fixes:
+   a) Replace mid-rollout TCA propagation with T-matrix lookup — the offline build already
+      computed the deterministic next-miss for every (state, action); no need to re-propagate.
+   b) Cache SC1/SC2 ECI states at each (miss_bin, stage) from the matrix build and store
+      in the .npz file. Simulator loads these and does stage-to-stage lookup instead of
+      re-propagating from scratch each rollout. Stage-to-stage propagation is still needed
+      for stochastic transitions (sampling noisy burns), but the nominal trajectory is fixed.
+   This would cut rollout time from ~15 min to seconds.
+
+3. **Parallel Brahe propagation** — investigate Brahe's batch/parallel propagation API.
+   Matrix build currently ~10 min for 96 states (16 stages); deviation tracking would push
+   to ~577 states (~60 min). Parallelizing across (state, action) pairs via multiprocessing
+   could cut build time by 4-8×. Check Brahe docs / source for vectorized propagate.
+
+2. **Scenario 3 structural fix** — sync must be a *choice*, not automatic. Options:
    - Use `sync_actions`: define a "communicate" joint action that triggers centralization
    - Use `sync_observations`: certain observations trigger centralization
    - Requires rethinking how contact windows translate to RSSDA sync mechanism

@@ -77,6 +77,8 @@ Collision Avoidance under Communication Constraints}
   \begin{itemize}
     \item Ground-station contact windows $=$ synchronization triggers
     \item Agents share beliefs \& coordinate \emph{only} during contacts
+    \item \textbf{Asymmetric observations}: each agent observes miss distance
+          based only on \emph{its own} maneuvers --- SC1 does not know SC2 burned
     \item Bridges centralized (always sync) and decentralized (never sync)
     \item Three scenarios quantify how communication structure shapes safety
   \end{itemize}
@@ -454,9 +456,9 @@ Collision Avoidance under Communication Constraints}
   \end{center}
   \vspace{0.4em}
   \begin{alertblock}{Current limitation}
-    Deterministic dynamics + one decisive early burn = all three variants identical.
-    The POMDP is not yet hard enough to differentiate centralized vs.\ decentralized.
-    Next: stochastic T, finer bins, or reduced contact frequency.
+    One decisive early burn = all three variants near-identical ($<0.3$\,km difference).
+    Observation asymmetry is now physically correct but policy timing is unchanged.
+    Next: trajectory deviation state to penalize early burns and force timing tradeoffs.
   \end{alertblock}
 \end{frame}
 
@@ -474,20 +476,24 @@ Collision Avoidance under Communication Constraints}
 
 \begin{frame}{Next Steps}
   \begin{enumerate}
-    \item \textbf{Scenario 3 fix}: make sync optional --- encode ``communicate'' vs.\
-          ``don't communicate'' as a choice using \texttt{sync\_actions} in RSSDA API
+    \item \textbf{Deviation-from-nominal state} --- expand state to
+          $(d_\text{miss},\; \delta_1,\; \delta_2,\; k)$ where $\delta_i$ bins
+          SC$i$'s along-track displacement from its no-burn trajectory at TCA\\
+          \small 4 bins per SC: $[0,2)$, $[2,20)$, $[20,60)$, $[60+)$\,km $\rightarrow$ 577 states total\\
+          Reward penalty $-\alpha(\delta_1 + \delta_2)$ per stage discourages early burns
     \vspace{0.2em}
-    \item \textbf{Scenario 2}: encode SC2's fixed (uncooperative) policy in T matrix:
+    \item \textbf{Intermediate non-contact timesteps} --- add 1--2 decentralized-only
+          steps in the 14\,h gap (stages 0$\rightarrow$1) to force richer sequential decisions
+    \vspace{0.2em}
+    \item \textbf{Scenario 3 fix}: make sync optional via \texttt{sync\_actions} ---
+          encode ``communicate'' vs.\ ``don't communicate'' as a deliberate choice
+    \vspace{0.2em}
+    \item \textbf{Scenario 2}: SC2 uncooperative ---
           $T_\text{asym}[a,s,s'] = T_\text{full}[a_1 \cdot 3,\, s,\, s']$
     \vspace{0.2em}
-    \item \textbf{Reward shaping}: continuous miss-distance penalty
-          $R(d) = -1000 \cdot \exp(-d/d_\text{safe})$ instead of step thresholds
-    \vspace{0.2em}
-    \item \textbf{Trajectory deviation cost}: penalize total $\Delta v$ / orbital element change
-    \vspace{0.2em}
-    \item \textbf{Finer bins}: 8 bins --- split collision and high-risk zones
-    \vspace{0.2em}
     \item \textbf{Obs noise sweep}: compare variants at $\sigma \in \{1, 5, 20\}$\,km
+    \vspace{0.2em}
+    \item \textbf{J2 perturbations}: upgrade from two-body to J2 propagator in Brahe
   \end{enumerate}
 \end{frame}
 
