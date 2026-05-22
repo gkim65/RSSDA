@@ -460,6 +460,88 @@ SDec (contacts)  1          0.0   127.895        0.5000        6.0
 
 ---
 
+## Session 7 Accomplishments (2026-05-21)
+
+### Sync Mechanism Clarified (with Mahdi) — MAJOR FINDING
+
+`sync_states` in RSSDA is a **partial belief split**: after every action, RSSDA calls
+`belief_split_by_id(d_next)` which measures how much belief mass lands on sync_states.
+That fraction goes into the centralized branch; the rest stays decentralized. It is NOT
+all-or-nothing per contact — it is proportional to where the belief mass ends up.
+
+This means: if the belief after a WAIT at stage 0 lands entirely on stage-1 states (a
+contact stage), `prob_cen ≈ 1.0` and RSSDA fully centralizes at step 1 automatically.
+**No action-based sync needed.** `sync_states` is the correct mechanism for GS contacts.
+
+### 36-Action SDec Dropped — REVERTED TO 9 ACTIONS
+
+The sync_flag in the action space was never seen by RSSDA's planning — RSSDA centralizes
+based on `sync_states`, not on which action was chosen. The 36-action encoding only changed
+obs quality in O but gave agents no real coordination choice. Dropped it.
+
+All 3 variants now use 9 joint actions (3 burns per agent). A TODO comment marks where to
+re-introduce per-agent sync_flag when Mahdi adds joint state+action conditional sync to RSSDA.
+
+### O Matrix Fixed — Shared Observation at Sync
+
+At sync contacts, both agents share one GPS measurement → they must see the same obs bin.
+Changed from `np.outer(p1, p2)` (independent) to `np.diag(p_GPS)` (diagonal, correlated):
+- `P(o1=o, o2=o) = p_GPS[o]` — both agents always observe the same bin
+- `P(o1=o, o2=o') = 0` for `o ≠ o'` — no divergent beliefs after sync
+
+Dec at contacts stays `np.outer(p_TLE, p_TLE)` — independent noisy obs, no sharing.
+
+### Sync Counting Fixed in Simulator
+
+Old code counted syncs via the action's `sync_flag` (always 0 after dropping 36-action SDec).
+New code counts via `is_cen` — whether RSSDA's `cen_dists_map` marks the current belief
+as centralized at this step. Removed `force_sync`, `sync_outside_contact`, all related code.
+
+### Sync Counting Fixed — at_contact, Not cen_dists_map
+
+Initial attempt counted syncs via `is_cen` (whether rollout's `current_belief_idx` is in
+`cen_dists_map[step]`). This was wrong: `cen_dists_map` only holds belief IDs from tree
+branches the solver happened to expand — the rollout's actual belief IDs often don't match,
+so syncs showed as 0 even when contacts were used. Briefly raised iter_limit 2000→10000
+thinking more expansion would fix it, but the policy value was identical — iter_limit
+was a red herring.
+
+Correct fix: count syncs by checking `at_contact` (is the current stage a contact stage?)
+for centralized/SDec. Dec has `contact_stages=[]` so always 0. This matches the physical
+definition: every contact stage IS a sync for centralized/SDec. iter_limit reverted to 2000.
+
+`iter_limit` is just the RS-SDA* search budget (node expansions). 2000 is fine for this
+problem — the policy value converges well before that.
+
+### SDec = Centralized (Expected, By Design)
+
+With the current setup, SDec and Centralized are identical:
+- Same `contact_stages` passed to `build_model` → same `sync_states` set
+- Same GPS diagonal obs in O matrix at contacts
+- RSSDA sees the same problem → same policy
+
+This is correct. To make SDec meaningfully different from Centralized, give SDec a
+**subset** of contact stages (fewer sync opportunities). This is Mahdi's suggested ablation:
+"which contacts are actually critical, what's the cost of fewer sync windows?"
+
+### Session 7 Results (5 rollouts, spread belief bins 0-2, σ=0.50, dv=0.5 m/s)
+
+```
+Scenario               Init bin   Coll%  Mean miss(km)  Mean dv(m/s)  Mean syncs
+Centralized            0            0.0        127.781         0.500         1.0
+Decentralized          0            0.0        130.129         5.500         0.0
+SDec (contacts)        0            0.0        127.781         0.500         1.0
+Centralized            1            0.0        127.961         0.500         1.0
+Decentralized          1            0.0        130.017         5.500         0.0
+SDec (contacts)        1            0.0        127.961         0.500         1.0
+```
+
+Policy behavior: WAIT at stage 0 → sync fires at stage 1 (first contact, T-23.4h) →
+burn once → WAIT remaining 14 stages. Only 1 of 6 contacts needed to solve the problem.
+Dec: no sync → both agents burn independently at multiple stages → 11× more fuel, same miss.
+
+---
+
 ## Session 6 Accomplishments (2026-05-20)
 
 ### Three-Variant Matrix Architecture — IMPLEMENTED

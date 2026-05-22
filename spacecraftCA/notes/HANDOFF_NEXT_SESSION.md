@@ -10,139 +10,114 @@ Always do tasks step by step and pause if you hit issues.
 
 ---
 
-## WHERE WE ARE (end of session 2026-05-20)
+## WHERE WE ARE (end of session 2026-05-21)
 
-Three-variant matrix architecture is working end-to-end. All three variants
-(centralized, sdec, dec) build, solve, and run rollouts. Dec OOMs at σ=0.50 with
-spread belief (expected — key paper result). SDec works but never syncs.
+Three-variant architecture is correct and working. Sync counting is fixed. All three
+variants use 9 joint actions. Session 7 changes are uncommitted (check `git status`).
 
-Committed baseline: commit 022f66d (sessions 1-4). Session 6 changes are uncommitted
-(check `git status` — modified: spacecraft_matrices.py, spacecraft_simulator.py,
-spacecraft_discretizer.py, sdec_spacecraft.py, notes/).
+Key architectural facts:
+- sync_states is correct for GS contacts (state-based, not action-based)
+- O matrix uses diagonal GPS obs at sync contacts (shared belief after sync)
+- Dec uses independent TLE outer product obs at contacts (no sharing)
+- iter_limit=2000 is fine; sync counting uses at_contact not cen_dists_map
+- Centralized = SDec right now because both get same contact_stages as sync_states
 
-Repo structure:
-  spacecraft_discretizer.py   — 6 miss-distance bins × 16 stages + 1 sink = 97 states
-  spacecraft_matrices.py      — T, O, R built with Brahe (3 variants, stochastic σ=0.50)
-  sdec_spacecraft.py          — RS-SDA* wrapper; infers action space from T shape
-  spacecraft_simulator.py     — closed-loop rollout; --compare mode; force_sync flag
-  plot_policy.py              — (miss_bin × stage) policy grid visualization
-  plot_conjunction_geometry.py — static PNG + GIF of RTN approach trajectory
-  examples/plot_deviation_vs_burn_time.py — deviation analysis plot
+Session 7 results (5 rollouts, spread belief, σ=0.50):
+  Centralized:  0% coll, 128km miss, 0.5 m/s dv, 1 sync  (waits for first contact)
+  SDec:         0% coll, 128km miss, 0.5 m/s dv, 1 sync  (identical to centralized)
+  Dec:          0% coll, 130km miss, 5.5 m/s dv, 0 syncs (11x more fuel)
 
-Notes:
-  notes/SESSION_NOTES.md      — full history and run order
-  notes/report/formulation.tex/.pdf  — 11-page technical reference
-  notes/slides/slides.tex/.pdf       — 21-page Beamer deck
-  notes/figures/                     — all generated plots
-
-Current model parameters (session 6):
-  dv = 0.5 m/s
-  EXEC_NOISE_SIGMA = 0.50  (±50% burn execution noise, 1-sigma)
-  GPS_SIGMA_KM = 0.1  (centralized / SDec-sync obs precision)
-  TLE_SIGMA_KM = 3.0  (dec and between-contact obs noise)
-  REWARD_COLLISION = -10000, REWARD_HIGH = -1000, REWARD_MOD = -100
-  REWARD_MANEUVER = -10 (flat, same all stages — this is what we're changing next)
-  SYNC_COST = -0.5, SYNC_OUTSIDE_COST = -0.05
-  16 stages: 10 ~2h grid + 6 GS contacts merged; CONTACT_STAGES = [3,5,7,9,11,13]
-  6 miss bins: [0,1), [1,5), [5,20), [20,100), [100,500), [500+) km
-  Spread initial belief: uniform over bins 0, 1, 2
-
-Session 6 comparison (5 rollouts, spread belief, sigma=0.50):
-  Centralized    bin 0:  0% coll, 19km miss,  1.0 m/s dv, 6.0 syncs
-  SDec           bin 0:  0% coll,  8km miss,  1.0 m/s dv, 0.0 syncs
-  Dec            bin 0:  OOM (7GB+, no belief collapse without sync states)
-  Centralized    bin 1:  0% coll, 129km miss, 0.5 m/s dv, 6.0 syncs
-  SDec           bin 1:  0% coll,   9km miss, 1.0 m/s dv, 0.0 syncs
-  Dec            bin 1:  OOM
+Current model parameters:
+  dv=0.5 m/s, EXEC_NOISE_SIGMA=0.50, GPS_SIGMA_KM=0.1, TLE_SIGMA_KM=3.0
+  REWARD_COLLISION=-10000, REWARD_HIGH=-1000, REWARD_MOD=-100, REWARD_MANEUVER=-10
+  16 stages (10 regular + 6 GS contacts), CONTACT_STAGES=[1,9,10,11,13,15]
+  iter_limit=10000, spread initial belief over bins 0-2
 
 ---
 
-## IMMEDIATE TASK 1: Stage-Dependent Maneuver Cost (highest priority)
+## IMMEDIATE TASK 1: Subset-Contacts SDec Ablation (highest priority)
 
-**Goal:** incentivize the policy to wait for a GS contact before committing a burn,
-so that SDec actually uses sync to refine belief before acting.
+This is the actual paper experiment. Right now Centralized = SDec because both use
+all 6 contacts as sync_states. The interesting question: what happens when SDec only
+has access to a subset?
 
-**Root cause of SDec never syncing:** policy burns at stage 0 (T-24h, before any
-contact). The first contact is at stage 1 (T-23.39h). After the stage-0 burn is
-committed, syncing at stage 1 can't change the decision — the trajectory is set.
+Setup in spacecraft_simulator.py, variant_specs:
+```python
+variant_specs = [
+    ("Centralized",       "centralized", contact_stages),        # all 6 contacts
+    ("SDec (3 contacts)", "sdec",        contact_stages[3:]),    # last 3 only: [11,13,15]
+    ("SDec (1 contact)",  "sdec",        contact_stages[-1:]),   # last 1 only: [15]
+    ("Decentralized",     "dec",         []),                    # none
+]
+```
 
-**Fix:** add `stage_maneuver_cost(stage)` in spacecraft_matrices.py that makes
-early burns expensive and late burns cheap:
+Expected: SDec with fewer contacts should use more dv (burns earlier with less info)
+and possibly miss more — showing the value of each additional contact window.
+This demonstrates why SDec exists: "how much communication is actually needed?"
+
+Note: all SDec variants load the same "sdec" matrix cache (same O matrix). Only the
+sync_states set passed to build_model differs between them.
+
+---
+
+## IMMEDIATE TASK 2: Stage-Dependent Maneuver Cost
+
+Still unimplemented. Add to spacecraft_matrices.py:
 
 ```python
-REWARD_MANEUVER       = -10.0   # base cost (stage 0, T-24h)
-REWARD_MANEUVER_LATE  =  -2.0   # cost at last stage (T-1h)
+REWARD_MANEUVER_LATE = -2.0   # cost at last stage (T-1h)
 
 def stage_maneuver_cost(stage: int) -> float:
     frac = stage / max(N_STAGES - 1, 1)
     return REWARD_MANEUVER + frac * (REWARD_MANEUVER_LATE - REWARD_MANEUVER)
 ```
 
-Then replace flat `r += REWARD_MANEUVER` in `build_matrices` with:
-  `r += stage_maneuver_cost(k)`
-
-Rebuild all three variants (`--variant all --force`), re-run comparison.
-Check if SDec policy now waits for first contact before burning.
-Expected: centralized still burns once (gets GPS obs first), SDec syncs at least once.
-
-**Important:** CONTACT_STAGES in spacecraft_matrices.py must be verified against the
-actual 16-stage schedule. The first contact is at `_GS_TIMES_H = 23.39h` which maps
-to stage index 3 in the merged 16-stage list (not stage 1). Verify with:
-```python
-print(CONTACT_STAGES)  # should be [3, 5, 7, 9, 11, 13] or similar
-print([_ALL_TIMES_H[i] for i in CONTACT_STAGES])  # should print GS contact hours
-```
+Replace flat `r += REWARD_MANEUVER` with `r += stage_maneuver_cost(k)` in build_matrices.
+Rebuild all variants (--variant all --force), re-run comparison.
+May interact with the subset-contacts ablation — do Task 1 first to establish baseline.
 
 ---
 
-## IMMEDIATE TASK 2: Sigma Sweep
+## IMMEDIATE TASK 3: 100-Rollout Full Comparison
 
-Sweep EXEC_NOISE_SIGMA ∈ {0.05, 0.15, 0.30, 0.50} and TLE_SIGMA_KM ∈ {1, 3, 5, 10}.
-For each, rebuild centralized only (fastest), run 20 rollouts, report miss distance spread.
-Goal: find minimum sigma where policies diverge across variants.
-
-Dec OOM threshold: find the sigma / spread combination where Dec first runs out of memory.
-At σ=0.50 with spread belief it OOMs at 7GB. At σ=0.15 it was tractable (near-deterministic).
+Dec no longer OOMs (9 actions vs old 36). Run full comparison:
+  .venv/bin/python spacecraftCA/spacecraft_simulator.py --compare --rollouts 100
 
 ---
 
-## IMMEDIATE TASK 3: Ensure SDec Has Meaningful Policy
+## FUTURE TODOS
 
-After implementing stage-dependent cost, verify that SDec:
-1. Syncs at least once in rollouts
-2. Burns at a *different* stage than centralized (not stage 0)
-3. Uses fewer burns than Dec (more efficient due to coordination)
+- **Sigma sweep**: EXEC_NOISE_SIGMA ∈ {0.15, 0.30, 0.50} and TLE_SIGMA_KM ∈ {1, 3, 5}
+  to characterize when policies diverge.
 
-If SDec still doesn't sync after stage-dependent cost, consider:
-- Moving stage 0 to T-23h so the first contact is actually BEFORE stage 0
-- Or: reorder stages so first decision is after first contact
-- Or: add a small "sync bonus" (negative SYNC_COST, i.e., positive reward for syncing
-  when it helps reduce uncertainty before a burn)
+- **Deviation tracking**: expand state to (miss_bin, SC1_dev_bin, SC2_dev_bin, stage)
+  = 577 states. Longer-term path for richer policy differentiation. See Session 5 notes.
+
+- **TODO(future code)**: when Mahdi adds joint state+action conditional sync to RS-SDA*,
+  re-introduce per-agent sync_flag (N_ACT_AGENT_SDEC=6) and wire sync_actions into
+  SDecPOMDPModel. See spacecraft_matrices.py TODO comment at N_ACT_AGENT definition.
 
 ---
 
-## FUTURE TODOS (lower priority)
+## SYNC MECHANISM REFERENCE (read this before touching sync logic)
 
-- **Deviation tracking**: expand state to (miss_bin, SC1_dev_bin, SC2_dev_bin, stage) —
-  577 states. Longer-term path to meaningful SDec differentiation without relying purely
-  on timing incentives. See Session 5 notes for bin thresholds and implementation plan.
+sync_states = proportional belief split, not mandatory all-or-nothing:
+  belief_split_by_id(d_next):
+    prob_cen = sum of belief mass on sync_states
+    prob_dec = 1 - prob_cen
+    → splits belief into c_id (centralized part) and d_id (decentralized part)
+    → value = (1-prob_dec)*V_cen(c_id) + prob_dec*V_dec(d_id)
 
-- **Full comparison table**: 100 rollouts with all 3 variants (blocked by Dec OOM).
-  Run centralized + SDec at 100 rollouts, skip Dec or reduce σ for Dec.
+At contacts all stage-k states (6 miss bins) are sync_states → if belief lands on
+a contact stage after an action, prob_cen≈1 → full centralization.
 
-- **Scenario 2**: asymmetric control — SC2 uncooperative (never maneuvers).
-  T_asym[a, s, s'] = T_full[(a1*3 + 0), s, s'] where a1 = a // 3.
+cen_dists_map[step] = list of belief IDs RSSDA planned as centralized at that step.
+In rollout: is_cen = (current_belief_idx in cen_dists_map[step]).
+sync_count increments when is_cen=True AND at_contact=True.
 
-- **Scenario 3 sweep**: c_sync sweep now has structural support (SYNC_COST in R).
-  Run sweep over SYNC_COST ∈ {0, -0.1, -0.5, -1.0, -5.0} and compare sync count vs. miss.
-
-- **Observation noise sweep**: compare variants at TLE_SIGMA_KM ∈ {1, 3, 5, 10} km.
-
-- **`split_joint_action` bug**: module-level `N_ACT_AGENT = 3` is wrong for SDec's
-  6-per-agent actions. Fix by passing `n_act_agent` to the function or using
-  `decode_agent_action` everywhere instead.
-
-- **`--fixed-init` trajectory tree**: needs updating for new 3-variant structure.
+iter_limit: RS-SDA* stops after this many node expansions. 2000 is fine — policy
+value converges well before that. Do NOT use cen_dists_map to count syncs; use
+at_contact instead (see sync counting note above).
 
 ---
 

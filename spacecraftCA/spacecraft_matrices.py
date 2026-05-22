@@ -42,21 +42,16 @@ from spacecraft_discretizer import (
 # ---------------------------------------------------------------------------
 
 N_BURN_AGENT    = 3                    # WAIT, +dV_T, -dV_T
-N_SYNC_OPTIONS  = 2                    # no-sync, sync (SDec only)
 N_OBS_AGENT     = N_MISS              # 6 observation bins per agent
 N_JOINT_OBS     = N_OBS_AGENT ** 2    # 36
 
-# Per-variant action counts (set by build_matrices variant parameter)
-# Centralized: 9 (burns only, sync forced at contacts)
-# SDec:       18 (burn × sync_flag per agent)
-# Dec:         9 (burns only, TLE obs at contacts)
-N_ACT_AGENT_CEN  = N_BURN_AGENT           # 3
-N_ACT_AGENT_SDEC = N_BURN_AGENT * N_SYNC_OPTIONS  # 6
-N_ACT_AGENT_DEC  = N_BURN_AGENT           # 3
-
-# Default (used for module-level constants — actual value set per build)
-N_ACT_AGENT     = N_BURN_AGENT
-N_JOINT_ACTIONS = N_ACT_AGENT ** 2    # 9 default
+# All three variants use the same 9-action space (3 burns per agent).
+# Sync is state-triggered in RSSDA via sync_states — not encoded in actions.
+# TODO(future): when Mahdi adds joint state+action conditional sync to RS-SDA*,
+#   re-introduce per-agent sync_flag here (N_ACT_AGENT_SDEC = N_BURN_AGENT * 2 = 6)
+#   and wire sync_actions into SDecPOMDPModel. Until then, sync is purely state-based.
+N_ACT_AGENT     = N_BURN_AGENT         # 3
+N_JOINT_ACTIONS = N_ACT_AGENT ** 2    # 9
 
 DV_MAGNITUDE    = 0.5                 # m/s  (good bin differentiation; use --dv to sweep)
 V_REL_MS        = 15.0                # along-track closing speed at TCA (m/s)
@@ -120,16 +115,8 @@ ACT_WAIT = 0
 ACT_POS  = 1   # +dV_T prograde
 ACT_NEG  = 2   # -dV_T retrograde
 
-# Joint action encoding: a = sync_flag * N_BURN_AGENT * N_BURN_AGENT
-#                            + burn1 * N_BURN_AGENT + burn2  ... wait no:
-# Per-agent action: agent_act = burn * N_SYNC_OPTIONS + sync_flag? No.
-# Per-agent: a_i = sync_flag_i * N_BURN_AGENT + burn_i
-#   burn_i  = a_i % N_BURN_AGENT   (0=WAIT, 1=POS, 2=NEG)
-#   sync_i  = a_i // N_BURN_AGENT  (0=no-sync, 1=sync)
-# Joint: a = a1 * N_ACT_AGENT + a2
-
-SYNC_COST         = -0.5   # reward penalty per joint sync at a contact stage
-SYNC_OUTSIDE_COST = -0.05  # small penalty for attempting sync outside contact
+# Joint action encoding: a = a1 * N_ACT_AGENT + a2
+# a1 = a // N_ACT_AGENT, a2 = a % N_ACT_AGENT  (each 0=WAIT, 1=POS, 2=NEG)
 
 
 # ---------------------------------------------------------------------------
@@ -137,14 +124,8 @@ SYNC_OUTSIDE_COST = -0.05  # small penalty for attempting sync outside contact
 # ---------------------------------------------------------------------------
 
 def split_joint_action(a: int):
-    """Returns (a1, a2) per-agent actions (each 0..5)."""
+    """Returns (a1, a2) per-agent burn actions (each 0=WAIT, 1=POS, 2=NEG)."""
     return a // N_ACT_AGENT, a % N_ACT_AGENT
-
-def decode_agent_action(a_i: int):
-    """Returns (burn, sync_flag) for a per-agent action index."""
-    burn    = a_i % N_BURN_AGENT   # 0=WAIT, 1=POS, 2=NEG
-    sync    = a_i // N_BURN_AGENT  # 0=no-sync, 1=sync
-    return burn, sync
 
 def make_prop(epoch: Epoch, eci: np.ndarray) -> NumericalOrbitPropagator:
     return NumericalOrbitPropagator(
@@ -277,8 +258,8 @@ def build_matrices(verbose: bool = True, dv_magnitude: float = None,
         dv_magnitude = DV_MAGNITUDE
     assert variant in ("centralized", "sdec", "dec"), f"Unknown variant: {variant}"
 
-    n_act_agent  = N_ACT_AGENT_SDEC if variant == "sdec" else N_BURN_AGENT
-    n_joint_acts = n_act_agent ** 2
+    n_act_agent  = N_ACT_AGENT
+    n_joint_acts = N_JOINT_ACTIONS
 
     if verbose:
         print(f"Building spacecraft CA matrices [{variant}] (miss-distance state)...")
@@ -362,15 +343,7 @@ def build_matrices(verbose: bool = True, dv_magnitude: float = None,
             s = state_index(mb, k)
 
             for a in range(n_joint_acts):
-                # Decode per-agent burn and (for SDec) sync flag
-                a1 = a // n_act_agent
-                a2 = a  % n_act_agent
-                if variant == "sdec":
-                    burn1, sync1 = decode_agent_action(a1)
-                    burn2, sync2 = decode_agent_action(a2)
-                else:
-                    burn1, sync1 = a1, 0
-                    burn2, sync2 = a2, 0
+                burn1, burn2 = split_joint_action(a)
 
                 rtn_tca = np.array(state_eci_to_rtn(
                     sc1_tca_prop[(mb, burn1, burn2)],
@@ -383,12 +356,6 @@ def build_matrices(verbose: bool = True, dv_magnitude: float = None,
                 r = REWARD_STEP
                 if burn1 != ACT_WAIT: r += REWARD_MANEUVER
                 if burn2 != ACT_WAIT: r += REWARD_MANEUVER
-                if variant == "sdec":
-                    joint_sync = (sync1 == 1) and (sync2 == 1)
-                    if joint_sync and at_contact:
-                        r += SYNC_COST
-                    elif (sync1 or sync2) and not at_contact:
-                        r += SYNC_OUTSIDE_COST
                 if k == N_STAGES - 1:
                     if mb == 0: r += REWARD_COLLISION
                     elif mb == 1: r += REWARD_HIGH
@@ -402,20 +369,19 @@ def build_matrices(verbose: bool = True, dv_magnitude: float = None,
                         if prob > 0.0:
                             T[a, s, state_index(nb, k + 1)] += prob
 
-                    if variant == "centralized" and at_contact:
-                        # Centralized: GPS-precise shared obs always at contacts
-                        p1 = obs_distribution(miss_tca_km, sigma=GPS_SIGMA_KM)
-                        p2 = obs_distribution(miss_tca_km, sigma=GPS_SIGMA_KM)
-                    elif variant == "sdec" and (sync1 == 1) and (sync2 == 1) and at_contact:
-                        # SDec: GPS obs only if both agents chose sync at contact
-                        p1 = obs_distribution(miss_tca_km, sigma=GPS_SIGMA_KM)
-                        p2 = obs_distribution(miss_tca_km, sigma=GPS_SIGMA_KM)
+                    if (variant in ("centralized", "sdec")) and at_contact:
+                        # Sync contact: agents share one GPS measurement → identical obs.
+                        # Joint obs distribution is diagonal: P(o1=o, o2=o) = p_GPS[o].
+                        # This ensures both agents end up with the same belief after sync.
+                        p_gps = obs_distribution(miss_tca_km, sigma=GPS_SIGMA_KM)
+                        p_joint = np.diag(p_gps).flatten()
                     elif variant == "dec" and at_contact:
-                        # Dec: TLE-quality shared obs at contacts (ground passes catalog)
+                        # Dec: independent TLE obs per agent (ground catalog, no sharing)
                         p1 = obs_distribution(miss_tca_km, sigma=TLE_SIGMA_KM)
                         p2 = obs_distribution(miss_tca_km, sigma=TLE_SIGMA_KM)
+                        p_joint = np.outer(p1, p2).flatten()
                     else:
-                        # Non-contact or no sync: asymmetric TLE obs (own burn known, other SC via TLE)
+                        # Non-contact: asymmetric TLE obs (own burn known, other SC via TLE)
                         rtn_sc1_view = np.array(state_eci_to_rtn(
                             sc1_tca_prop[(mb, burn1, burn2)], sc2_no_burn[mb]))
                         miss_sc1_view = np.linalg.norm(rtn_sc1_view[:3]) / 1e3
@@ -424,8 +390,8 @@ def build_matrices(verbose: bool = True, dv_magnitude: float = None,
                         miss_sc2_view = np.linalg.norm(rtn_sc2_view[:3]) / 1e3
                         p1 = obs_distribution(miss_sc1_view, sigma=TLE_SIGMA_KM)
                         p2 = obs_distribution(miss_sc2_view, sigma=TLE_SIGMA_KM)
+                        p_joint = np.outer(p1, p2).flatten()
 
-                    p_joint = np.outer(p1, p2).flatten()
                     for nb, prob in enumerate(next_bin_dist):
                         if prob > 0.0:
                             O[a, state_index(nb, k + 1), :] += prob * p_joint
@@ -523,15 +489,12 @@ def verify_matrices(T, O, R, init_b, contact_stages):
     mid_stage = N_STAGES // 2
     print(f"\n  Example transitions (stage {mid_stage}, miss_bins 0-2):")
     burn_names = {0: 'WAIT', 1: '+dVT', 2: '-dVT'}
-    sync_names = {0: '', 1: '+sync'}
     for mb in range(3):
         s = state_index(mb, mid_stage)
         next_bins_per_action = {}
         for a in range(N_JOINT_ACTIONS):
             a1, a2 = split_joint_action(a)
-            b1, s1 = decode_agent_action(a1)
-            b2, s2 = decode_agent_action(a2)
-            label = f"({burn_names[b1]}{sync_names[s1]},{burn_names[b2]}{sync_names[s2]})"
+            label = f"({burn_names[a1]},{burn_names[a2]})"
             next_states = np.where(T[a, s, :] > 0)[0]
             for sp in next_states:
                 if sp < N_STATES:

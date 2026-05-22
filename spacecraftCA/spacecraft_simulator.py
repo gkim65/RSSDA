@@ -42,8 +42,8 @@ from brahe import (
 from spacecraft_matrices import (
     load_matrices, DV_MAGNITUDE,
     STAGE_EPOCHS, EPOCH_TCA, V_REL_MS,
-    N_JOINT_ACTIONS, N_ACT_AGENT, N_BURN_AGENT, TLE_SIGMA_KM, GPS_SIGMA_KM, SYNC_COST,
-    split_joint_action, decode_agent_action, apply_maneuver, propagate, sc1_eci_at_tca,
+    N_JOINT_ACTIONS, N_ACT_AGENT, N_BURN_AGENT, TLE_SIGMA_KM, GPS_SIGMA_KM,
+    split_joint_action, apply_maneuver, propagate, sc1_eci_at_tca,
     make_prop, CONTACT_STAGES,
 )
 from spacecraft_discretizer import (
@@ -112,8 +112,7 @@ def precompute_traj_tree(
 
             if child_prefix not in seen_child_prefixes:
                 seen_child_prefixes.add(child_prefix)
-                burn1_t, _ = decode_agent_action(a1)
-                burn2_t, _ = decode_agent_action(a2)
+                burn1_t, burn2_t = a1, a2
                 sc1_post = apply_maneuver(sc1_cur, burn1_t, dv=dv_mag)
                 sc2_post = apply_maneuver(sc2_cur, burn2_t, dv=dv_mag)
                 to_propagate.append((child_prefix, sc1_post, sc2_post))
@@ -290,7 +289,7 @@ def rollout_rssda(
     dv_mag: float,
     rng: np.random.Generator,
     traj_cache: Optional[dict] = None,
-    force_sync: bool = False,  # if True, always sync at contact stages (centralized)
+    # Sync is determined entirely by is_cen from RSSDA's cen_dists_map (sync_states mechanism).
 ) -> dict:
     """
     Closed-loop rollout using the full RS-SDA* policy.
@@ -319,7 +318,6 @@ def rollout_rssda(
 
     total_dv = 0.0
     sync_count = 0
-    sync_outside_contact = 0
     maneuver_stages = []
     miss_bin_traj = []
     action_history = []  # joint actions taken so far — cache key prefix
@@ -354,28 +352,24 @@ def rollout_rssda(
         if joint_act < 0:
             joint_act, a1, a2 = 0, 0, 0
 
-        burn1, sync1 = decode_agent_action(a1)
-        burn2, sync2 = decode_agent_action(a2)
+        burn1, burn2 = a1, a2
         at_contact = k in contact_stages
-        joint_sync = (sync1 == 1) and (sync2 == 1)
-        effective_sync = joint_sync or (force_sync and at_contact)
+        # A variant has sync at every contact stage it was given — not just the ones
+        # the policy tree happened to expand. Dec has no contact_stages so never syncs.
+        variant_syncs = len(contact_stages) > 0
 
-        # Generate obs at every contact stage (type depends on variant):
-        #   centralized (force_sync): GPS obs, counts as sync
-        #   sdec: GPS obs only if both chose sync, else TLE
-        #   dec: always TLE obs at contacts (no sync flag)
+        # At a contact: sync always fires for centralized/sdec (shared GPS obs).
+        # Dec gets independent TLE obs at contacts (no sharing).
+        # Non-contact stages: no observation.
         obs1 = obs2 = 0
         if at_contact:
-            if effective_sync:
+            if variant_syncs:
                 sync_count += 1
-                obs1 = simulate_obs(true_miss_km, sigma_km=GPS_SIGMA_KM, rng=rng)
-                obs2 = simulate_obs(true_miss_km, sigma_km=GPS_SIGMA_KM, rng=rng)
+                shared = simulate_obs(true_miss_km, sigma_km=GPS_SIGMA_KM, rng=rng)
+                obs1 = obs2 = shared
             else:
-                # Dec or SDec without sync: TLE obs at contact
                 obs1 = simulate_obs(true_miss_km, sigma_km=TLE_SIGMA_KM, rng=rng)
                 obs2 = simulate_obs(true_miss_km, sigma_km=TLE_SIGMA_KM, rng=rng)
-        elif not at_contact and joint_sync:
-            sync_outside_contact += 1
 
         obs_joint = obs1 * N_MISS + obs2
 
@@ -425,7 +419,6 @@ def rollout_rssda(
         'miss_km_at_tca':          miss_km_at_tca,
         'total_dv_ms':             total_dv,
         'sync_count':              sync_count,
-        'sync_outside_contact':    sync_outside_contact,
         'maneuver_stages':         maneuver_stages,
         'miss_bin_trajectory':     miss_bin_traj,
     }
@@ -452,7 +445,6 @@ def rollout_greedy(
     belief = init_b.copy()
     total_dv = 0.0
     sync_count = 0
-    sync_outside_contact = 0
     maneuver_stages = []
     miss_bin_traj = []
 
@@ -469,25 +461,17 @@ def rollout_greedy(
 
         most_likely_s = int(np.argmax(belief[:N_STATES]))
         a = greedy_policy[most_likely_s]
-        a1, a2 = split_joint_action(a)
-        burn1, sync1 = decode_agent_action(a1)
-        burn2, sync2 = decode_agent_action(a2)
+        burn1, burn2 = split_joint_action(a)
         at_contact = k in contact_stages
-        joint_sync = (sync1 == 1) and (sync2 == 1)
 
         obs1 = obs2 = 0
         if at_contact:
-            if joint_sync:
-                sync_count += 1
-                obs1 = simulate_obs(true_miss_km, sigma_km=GPS_SIGMA_KM, rng=rng)
-                obs2 = simulate_obs(true_miss_km, sigma_km=GPS_SIGMA_KM, rng=rng)
-            else:
-                obs1 = simulate_obs(true_miss_km, sigma_km=TLE_SIGMA_KM, rng=rng)
-                obs2 = simulate_obs(true_miss_km, sigma_km=TLE_SIGMA_KM, rng=rng)
+            # Greedy rollout always uses GPS shared obs at contacts (centralized baseline)
+            sync_count += 1
+            shared = simulate_obs(true_miss_km, sigma_km=GPS_SIGMA_KM, rng=rng)
+            obs1 = obs2 = shared
             obs_joint = obs1 * N_MISS + obs2
             belief = belief_update(belief, a, obs_joint, T, O)
-        elif not at_contact and joint_sync:
-            sync_outside_contact += 1
 
         if burn1 != 0 or burn2 != 0:
             maneuver_stages.append((k, burn1, burn2))
@@ -512,7 +496,6 @@ def rollout_greedy(
         'miss_km_at_tca':          miss_km_at_tca,
         'total_dv_ms':             total_dv,
         'sync_count':              sync_count,
-        'sync_outside_contact':    sync_outside_contact,
         'maneuver_stages':         maneuver_stages,
         'miss_bin_trajectory':     miss_bin_traj,
     }
@@ -534,7 +517,6 @@ def run_simulation(
     sdec=None,
     full_result=None,
     fixed_init: bool = False,
-    force_sync: bool = False,
 ) -> List[dict]:
     """
     fixed_init=True: all rollouts start from bin_center_km(init_miss_bin).
@@ -584,8 +566,7 @@ def run_simulation(
         else:
             r = rollout_rssda(T, O, R, sdec, full_result, contact_stages,
                               true_miss_km, dv_mag, rng,
-                              traj_cache=traj_cache,
-                              force_sync=force_sync)
+                              traj_cache=traj_cache)
         results.append(r)
         if verbose and (i + 1) % 10 == 0:
             print(f"  rollout {i+1}/{n_rollouts}  "
@@ -599,18 +580,16 @@ def summarize(results: List[dict], label: str, init_miss_bin: int, dv_mag: float
     misses         = [r['miss_km_at_tca']       for r in results]
     dvs            = [r['total_dv_ms']          for r in results]
     syncs          = [r['sync_count']           for r in results]
-    syncs_outside  = [r.get('sync_outside_contact', 0) for r in results]
     n_coll = sum(1 for m in misses if m < 1.0)
     return {
-        'label':               label,
-        'n':                   len(results),
-        'init_bin':            init_miss_bin,
-        'coll_rate':           100.0 * n_coll / len(results),
-        'mean_miss':           float(np.mean(misses)),
-        'min_miss':            float(np.min(misses)),
-        'mean_dv':             float(np.mean(dvs)),
-        'mean_syncs':          float(np.mean(syncs)),
-        'mean_syncs_outside':  float(np.mean(syncs_outside)),
+        'label':      label,
+        'n':          len(results),
+        'init_bin':   init_miss_bin,
+        'coll_rate':  100.0 * n_coll / len(results),
+        'mean_miss':  float(np.mean(misses)),
+        'min_miss':   float(np.min(misses)),
+        'mean_dv':    float(np.mean(dvs)),
+        'mean_syncs': float(np.mean(syncs)),
     }
 
 
@@ -625,8 +604,7 @@ def print_summary(results: List[dict], init_miss_bin: int, dv_mag: float, label:
     print(f"  Collisions:  {s['coll_rate']:.1f}%")
     print(f"  Miss at TCA: min={s['min_miss']:.3f}  mean={s['mean_miss']:.3f}  km")
     print(f"  Total dv:    mean={s['mean_dv']:.4f} m/s")
-    print(f"  Sync events: mean={s['mean_syncs']:.1f} of {N_STAGES} stages  "
-          f"(outside contact: {s['mean_syncs_outside']:.1f})")
+    print(f"  Sync events: mean={s['mean_syncs']:.1f} of {N_STAGES} stages")
     print(f"\n  Miss-bin distribution at TCA:")
     from collections import Counter
     cnt = Counter(miss_to_bin(m) for m in misses)
@@ -723,7 +701,6 @@ if __name__ == "__main__":
                     sdec=sdec_obj,
                     full_result=full_res,
                     fixed_init=args.fixed_init,
-                    force_sync=(mat_variant == "centralized"),
                 )
                 s = summarize(results, label, init_bin, dv_mag)
                 all_summaries.append(s)
