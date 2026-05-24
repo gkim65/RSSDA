@@ -1,0 +1,1297 @@
+variant,matrix_variant,init_bin,eval_mode,stage,joint_action,action_label,action_prob,base_variant,solver_mode,ti1_enabled
+Centralized,centralized,0,expected,0,0,WAIT,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,0,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,0,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,0,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,0,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,0,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,0,6,SC2-,1.0,Centralized,fixed,False
+Centralized,centralized,0,expected,0,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,0,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,1,0,WAIT,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,1,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,1,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,1,3,SC2+,1.0,Centralized,fixed,False
+Centralized,centralized,0,expected,1,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,1,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,1,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,1,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,1,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,2,0,WAIT,0.9674541711596902,Centralized,fixed,False
+Centralized,centralized,0,expected,2,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,2,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,2,3,SC2+,0.03254582884030978,Centralized,fixed,False
+Centralized,centralized,0,expected,2,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,2,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,2,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,2,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,2,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,3,0,WAIT,0.9674541711596902,Centralized,fixed,False
+Centralized,centralized,0,expected,3,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,3,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,3,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,3,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,3,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,3,6,SC2-,0.03254582884030978,Centralized,fixed,False
+Centralized,centralized,0,expected,3,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,3,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,4,0,WAIT,1.0,Centralized,fixed,False
+Centralized,centralized,0,expected,4,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,4,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,4,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,4,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,4,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,4,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,4,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,4,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,5,0,WAIT,0.9983956240952792,Centralized,fixed,False
+Centralized,centralized,0,expected,5,1,SC1+,0.000644471858223956,Centralized,fixed,False
+Centralized,centralized,0,expected,5,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,5,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,5,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,5,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,5,6,SC2-,0.0009599040464969956,Centralized,fixed,False
+Centralized,centralized,0,expected,5,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,5,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,6,0,WAIT,0.9997553454412967,Centralized,fixed,False
+Centralized,centralized,0,expected,6,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,6,2,SC1-,0.00010209455179785441,Centralized,fixed,False
+Centralized,centralized,0,expected,6,3,SC2+,0.0001425600069054944,Centralized,fixed,False
+Centralized,centralized,0,expected,6,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,6,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,6,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,6,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,6,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,7,0,WAIT,0.9999599846314967,Centralized,fixed,False
+Centralized,centralized,0,expected,7,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,7,2,SC1-,3.5170723776522186e-05,Centralized,fixed,False
+Centralized,centralized,0,expected,7,3,SC2+,4.844644726798987e-06,Centralized,fixed,False
+Centralized,centralized,0,expected,7,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,7,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,7,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,7,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,7,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,8,0,WAIT,0.9999897594383598,Centralized,fixed,False
+Centralized,centralized,0,expected,8,1,SC1+,8.705624697158959e-06,Centralized,fixed,False
+Centralized,centralized,0,expected,8,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,8,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,8,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,8,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,8,6,SC2-,1.5349369431442332e-06,Centralized,fixed,False
+Centralized,centralized,0,expected,8,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,8,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,9,0,WAIT,0.9999996380577195,Centralized,fixed,False
+Centralized,centralized,0,expected,9,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,9,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,9,3,SC2+,1.5915888178393418e-07,Centralized,fixed,False
+Centralized,centralized,0,expected,9,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,9,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,9,6,SC2-,2.0278339881788497e-07,Centralized,fixed,False
+Centralized,centralized,0,expected,9,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,9,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,10,0,WAIT,0.999999841458323,Centralized,fixed,False
+Centralized,centralized,0,expected,10,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,10,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,10,3,SC2+,9.235679550121493e-08,Centralized,fixed,False
+Centralized,centralized,0,expected,10,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,10,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,10,6,SC2-,6.618488153391321e-08,Centralized,fixed,False
+Centralized,centralized,0,expected,10,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,10,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,11,0,WAIT,0.9999999860008187,Centralized,fixed,False
+Centralized,centralized,0,expected,11,1,SC1+,3.139439149210458e-09,Centralized,fixed,False
+Centralized,centralized,0,expected,11,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,11,3,SC2+,1.0859742197119605e-08,Centralized,fixed,False
+Centralized,centralized,0,expected,11,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,11,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,11,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,11,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,11,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,12,0,WAIT,0.9999999978906173,Centralized,fixed,False
+Centralized,centralized,0,expected,12,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,12,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,12,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,12,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,12,5,SC1- SC2+,4.965496166485961e-10,Centralized,fixed,False
+Centralized,centralized,0,expected,12,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,12,7,SC1+ SC2-,1.612832999573488e-09,Centralized,fixed,False
+Centralized,centralized,0,expected,12,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,13,0,WAIT,0.999999999729103,Centralized,fixed,False
+Centralized,centralized,0,expected,13,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,13,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,13,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,13,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,13,5,SC1- SC2+,1.7565507916168245e-10,Centralized,fixed,False
+Centralized,centralized,0,expected,13,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,13,7,SC1+ SC2-,9.52418928910994e-11,Centralized,fixed,False
+Centralized,centralized,0,expected,13,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,14,0,WAIT,0.9999999999955109,Centralized,fixed,False
+Centralized,centralized,0,expected,14,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,14,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,14,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,14,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,14,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,14,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,14,7,SC1+ SC2-,4.489032371449101e-12,Centralized,fixed,False
+Centralized,centralized,0,expected,14,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,15,0,WAIT,1.0,Centralized,fixed,False
+Centralized,centralized,0,expected,15,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,15,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,15,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,15,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,15,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,15,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,15,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,0,expected,15,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,0,0,WAIT,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,0,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,0,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,0,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,0,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,0,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,0,6,SC2-,1.0,Centralized,fixed,False
+Centralized,centralized,1,expected,0,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,0,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,1,0,WAIT,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,1,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,1,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,1,3,SC2+,1.0,Centralized,fixed,False
+Centralized,centralized,1,expected,1,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,1,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,1,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,1,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,1,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,2,0,WAIT,0.9676502303695717,Centralized,fixed,False
+Centralized,centralized,1,expected,2,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,2,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,2,3,SC2+,0.0323497696304284,Centralized,fixed,False
+Centralized,centralized,1,expected,2,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,2,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,2,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,2,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,2,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,3,0,WAIT,0.9676502303695717,Centralized,fixed,False
+Centralized,centralized,1,expected,3,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,3,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,3,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,3,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,3,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,3,6,SC2-,0.03234976963042839,Centralized,fixed,False
+Centralized,centralized,1,expected,3,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,3,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,4,0,WAIT,1.0,Centralized,fixed,False
+Centralized,centralized,1,expected,4,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,4,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,4,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,4,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,4,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,4,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,4,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,4,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,5,0,WAIT,0.9984051954595101,Centralized,fixed,False
+Centralized,centralized,1,expected,5,1,SC1+,0.0006405894976322455,Centralized,fixed,False
+Centralized,centralized,1,expected,5,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,5,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,5,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,5,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,5,6,SC2-,0.0009542150428576575,Centralized,fixed,False
+Centralized,centralized,1,expected,5,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,5,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,6,0,WAIT,0.9997568053702477,Centralized,fixed,False
+Centralized,centralized,1,expected,6,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,6,2,SC1-,0.00010147952437738542,Centralized,fixed,False
+Centralized,centralized,1,expected,6,3,SC2+,0.0001417151053748996,Centralized,fixed,False
+Centralized,centralized,1,expected,6,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,6,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,6,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,6,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,6,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,7,0,WAIT,0.9999602234135866,Centralized,fixed,False
+Centralized,centralized,1,expected,7,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,7,2,SC1-,3.496085117083132e-05,Centralized,fixed,False
+Centralized,centralized,1,expected,7,3,SC2+,4.8157352426195056e-06,Centralized,fixed,False
+Centralized,centralized,1,expected,7,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,7,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,7,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,7,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,7,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,8,0,WAIT,0.999989820546465,Centralized,fixed,False
+Centralized,centralized,1,expected,8,1,SC1+,8.65367603238399e-06,Centralized,fixed,False
+Centralized,centralized,1,expected,8,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,8,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,8,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,8,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,8,6,SC2-,1.5257775026121204e-06,Centralized,fixed,False
+Centralized,centralized,1,expected,8,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,8,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,9,0,WAIT,0.9999996402175236,Centralized,fixed,False
+Centralized,centralized,1,expected,9,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,9,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,9,3,SC2+,1.5820913913132395e-07,Centralized,fixed,False
+Centralized,centralized,1,expected,9,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,9,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,9,6,SC2-,2.0157333732665564e-07,Centralized,fixed,False
+Centralized,centralized,1,expected,9,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,9,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,10,0,WAIT,0.9999998424043827,Centralized,fixed,False
+Centralized,centralized,1,expected,10,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,10,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,10,3,SC2+,9.180567838639763e-08,Centralized,fixed,False
+Centralized,centralized,1,expected,10,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,10,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,10,6,SC2-,6.578993904470897e-08,Centralized,fixed,False
+Centralized,centralized,1,expected,10,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,10,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,11,0,WAIT,0.9999999860843554,Centralized,fixed,False
+Centralized,centralized,1,expected,11,1,SC1+,3.1207052956654762e-09,Centralized,fixed,False
+Centralized,centralized,1,expected,11,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,11,3,SC2+,1.079493927829942e-08,Centralized,fixed,False
+Centralized,centralized,1,expected,11,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,11,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,11,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,11,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,11,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,12,0,WAIT,0.9999999979032046,Centralized,fixed,False
+Centralized,centralized,1,expected,12,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,12,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,12,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,12,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,12,5,SC1- SC2+,4.935865753681961e-10,Centralized,fixed,False
+Centralized,centralized,1,expected,12,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,12,7,SC1+ SC2-,1.6032088037090894e-09,Centralized,fixed,False
+Centralized,centralized,1,expected,12,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,13,0,WAIT,0.9999999997307195,Centralized,fixed,False
+Centralized,centralized,1,expected,13,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,13,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,13,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,13,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,13,5,SC1- SC2+,1.7460689941407214e-10,Centralized,fixed,False
+Centralized,centralized,1,expected,13,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,13,7,SC1+ SC2-,9.467355963493849e-11,Centralized,fixed,False
+Centralized,centralized,1,expected,13,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,14,0,WAIT,0.9999999999955378,Centralized,fixed,False
+Centralized,centralized,1,expected,14,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,14,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,14,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,14,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,14,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,14,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,14,7,SC1+ SC2-,4.4622451425334424e-12,Centralized,fixed,False
+Centralized,centralized,1,expected,14,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,15,0,WAIT,1.0,Centralized,fixed,False
+Centralized,centralized,1,expected,15,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,15,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,15,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,15,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,15,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,15,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,15,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,1,expected,15,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,0,0,WAIT,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,0,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,0,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,0,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,0,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,0,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,0,6,SC2-,1.0,Centralized,fixed,False
+Centralized,centralized,2,expected,0,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,0,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,1,0,WAIT,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,1,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,1,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,1,3,SC2+,1.0,Centralized,fixed,False
+Centralized,centralized,2,expected,1,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,1,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,1,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,1,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,1,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,2,0,WAIT,0.9676502303695717,Centralized,fixed,False
+Centralized,centralized,2,expected,2,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,2,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,2,3,SC2+,0.0323497696304284,Centralized,fixed,False
+Centralized,centralized,2,expected,2,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,2,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,2,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,2,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,2,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,3,0,WAIT,0.9676502303695717,Centralized,fixed,False
+Centralized,centralized,2,expected,3,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,3,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,3,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,3,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,3,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,3,6,SC2-,0.03234976963042839,Centralized,fixed,False
+Centralized,centralized,2,expected,3,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,3,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,4,0,WAIT,1.0,Centralized,fixed,False
+Centralized,centralized,2,expected,4,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,4,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,4,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,4,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,4,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,4,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,4,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,4,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,5,0,WAIT,0.9984051954595101,Centralized,fixed,False
+Centralized,centralized,2,expected,5,1,SC1+,0.0006405894976322455,Centralized,fixed,False
+Centralized,centralized,2,expected,5,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,5,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,5,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,5,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,5,6,SC2-,0.0009542150428576575,Centralized,fixed,False
+Centralized,centralized,2,expected,5,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,5,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,6,0,WAIT,0.9997568053702477,Centralized,fixed,False
+Centralized,centralized,2,expected,6,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,6,2,SC1-,0.00010147952437738542,Centralized,fixed,False
+Centralized,centralized,2,expected,6,3,SC2+,0.0001417151053748996,Centralized,fixed,False
+Centralized,centralized,2,expected,6,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,6,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,6,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,6,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,6,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,7,0,WAIT,0.9999602234135866,Centralized,fixed,False
+Centralized,centralized,2,expected,7,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,7,2,SC1-,3.496085117083132e-05,Centralized,fixed,False
+Centralized,centralized,2,expected,7,3,SC2+,4.8157352426195056e-06,Centralized,fixed,False
+Centralized,centralized,2,expected,7,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,7,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,7,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,7,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,7,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,8,0,WAIT,0.999989820546465,Centralized,fixed,False
+Centralized,centralized,2,expected,8,1,SC1+,8.65367603238399e-06,Centralized,fixed,False
+Centralized,centralized,2,expected,8,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,8,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,8,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,8,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,8,6,SC2-,1.5257775026121204e-06,Centralized,fixed,False
+Centralized,centralized,2,expected,8,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,8,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,9,0,WAIT,0.9999996402175236,Centralized,fixed,False
+Centralized,centralized,2,expected,9,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,9,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,9,3,SC2+,1.5820913913132395e-07,Centralized,fixed,False
+Centralized,centralized,2,expected,9,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,9,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,9,6,SC2-,2.0157333732665564e-07,Centralized,fixed,False
+Centralized,centralized,2,expected,9,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,9,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,10,0,WAIT,0.9999998424043827,Centralized,fixed,False
+Centralized,centralized,2,expected,10,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,10,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,10,3,SC2+,9.180567838639763e-08,Centralized,fixed,False
+Centralized,centralized,2,expected,10,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,10,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,10,6,SC2-,6.578993904470897e-08,Centralized,fixed,False
+Centralized,centralized,2,expected,10,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,10,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,11,0,WAIT,0.9999999860843554,Centralized,fixed,False
+Centralized,centralized,2,expected,11,1,SC1+,3.1207052956654762e-09,Centralized,fixed,False
+Centralized,centralized,2,expected,11,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,11,3,SC2+,1.079493927829942e-08,Centralized,fixed,False
+Centralized,centralized,2,expected,11,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,11,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,11,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,11,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,11,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,12,0,WAIT,0.9999999979032046,Centralized,fixed,False
+Centralized,centralized,2,expected,12,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,12,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,12,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,12,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,12,5,SC1- SC2+,4.935865753681961e-10,Centralized,fixed,False
+Centralized,centralized,2,expected,12,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,12,7,SC1+ SC2-,1.6032088037090894e-09,Centralized,fixed,False
+Centralized,centralized,2,expected,12,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,13,0,WAIT,0.9999999997307195,Centralized,fixed,False
+Centralized,centralized,2,expected,13,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,13,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,13,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,13,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,13,5,SC1- SC2+,1.7460689941407214e-10,Centralized,fixed,False
+Centralized,centralized,2,expected,13,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,13,7,SC1+ SC2-,9.467355963493849e-11,Centralized,fixed,False
+Centralized,centralized,2,expected,13,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,14,0,WAIT,0.9999999999955378,Centralized,fixed,False
+Centralized,centralized,2,expected,14,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,14,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,14,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,14,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,14,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,14,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,14,7,SC1+ SC2-,4.4622451425334424e-12,Centralized,fixed,False
+Centralized,centralized,2,expected,14,8,Both-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,15,0,WAIT,1.0,Centralized,fixed,False
+Centralized,centralized,2,expected,15,1,SC1+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,15,2,SC1-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,15,3,SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,15,4,Both+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,15,5,SC1- SC2+,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,15,6,SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,15,7,SC1+ SC2-,0.0,Centralized,fixed,False
+Centralized,centralized,2,expected,15,8,Both-,0.0,Centralized,fixed,False
+SDec,sdec,0,expected,0,0,WAIT,0.0,SDec,fixed,False
+SDec,sdec,0,expected,0,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,0,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,0,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,0,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,0,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,0,6,SC2-,1.0,SDec,fixed,False
+SDec,sdec,0,expected,0,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,0,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,1,0,WAIT,0.0,SDec,fixed,False
+SDec,sdec,0,expected,1,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,1,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,1,3,SC2+,1.0,SDec,fixed,False
+SDec,sdec,0,expected,1,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,1,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,1,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,1,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,1,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,2,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,0,expected,2,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,2,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,2,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,2,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,2,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,2,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,2,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,2,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,3,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,0,expected,3,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,3,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,3,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,3,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,3,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,3,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,3,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,3,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,4,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,0,expected,4,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,4,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,4,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,4,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,4,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,4,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,4,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,4,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,5,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,0,expected,5,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,5,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,5,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,5,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,5,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,5,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,5,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,5,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,6,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,0,expected,6,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,6,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,6,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,6,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,6,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,6,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,6,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,6,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,7,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,0,expected,7,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,7,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,7,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,7,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,7,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,7,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,7,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,7,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,8,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,0,expected,8,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,8,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,8,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,8,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,8,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,8,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,8,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,8,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,9,0,WAIT,0.9801980198019802,SDec,fixed,False
+SDec,sdec,0,expected,9,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,9,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,9,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,9,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,9,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,9,6,SC2-,0.019801980198019806,SDec,fixed,False
+SDec,sdec,0,expected,9,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,9,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,10,0,WAIT,0.9909812763454563,SDec,fixed,False
+SDec,sdec,0,expected,10,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,10,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,10,3,SC2+,0.008822664444662287,SDec,fixed,False
+SDec,sdec,0,expected,10,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,10,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,10,6,SC2-,0.0001960592098813842,SDec,fixed,False
+SDec,sdec,0,expected,10,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,10,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,11,0,WAIT,0.9992545867663916,SDec,fixed,False
+SDec,sdec,0,expected,11,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,11,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,11,3,SC2+,0.0005435304828394809,SDec,fixed,False
+SDec,sdec,0,expected,11,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,11,5,SC1- SC2+,2.717652414197405e-05,SDec,fixed,False
+SDec,sdec,0,expected,11,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,11,7,SC1+ SC2-,0.000174706226626976,SDec,fixed,False
+SDec,sdec,0,expected,11,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,12,0,WAIT,0.9988896448707708,SDec,fixed,False
+SDec,sdec,0,expected,12,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,12,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,12,3,SC2+,0.0003921184197627685,SDec,fixed,False
+SDec,sdec,0,expected,12,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,12,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,12,6,SC2-,0.0007182367094664569,SDec,fixed,False
+SDec,sdec,0,expected,12,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,12,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,13,0,WAIT,0.9999696916314007,SDec,fixed,False
+SDec,sdec,0,expected,13,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,13,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,13,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,13,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,13,5,SC1- SC2+,2.9770219606390044e-05,SDec,fixed,False
+SDec,sdec,0,expected,13,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,13,7,SC1+ SC2-,1.065641570119559e-08,SDec,fixed,False
+SDec,sdec,0,expected,13,8,Both-,5.274925772091817e-07,SDec,fixed,False
+SDec,sdec,0,expected,14,0,WAIT,0.9998940535345124,SDec,fixed,False
+SDec,sdec,0,expected,14,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,14,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,14,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,14,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,14,5,SC1- SC2+,9.215439946628917e-05,SDec,fixed,False
+SDec,sdec,0,expected,14,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,14,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,14,8,Both-,1.3792066021272389e-05,SDec,fixed,False
+SDec,sdec,0,expected,15,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,0,expected,15,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,15,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,15,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,15,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,15,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,0,expected,15,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,15,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,0,expected,15,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,0,0,WAIT,0.0,SDec,fixed,False
+SDec,sdec,1,expected,0,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,0,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,0,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,0,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,0,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,0,6,SC2-,1.0,SDec,fixed,False
+SDec,sdec,1,expected,0,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,0,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,1,0,WAIT,0.0,SDec,fixed,False
+SDec,sdec,1,expected,1,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,1,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,1,3,SC2+,1.0,SDec,fixed,False
+SDec,sdec,1,expected,1,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,1,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,1,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,1,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,1,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,2,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,1,expected,2,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,2,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,2,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,2,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,2,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,2,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,2,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,2,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,3,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,1,expected,3,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,3,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,3,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,3,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,3,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,3,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,3,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,3,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,4,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,1,expected,4,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,4,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,4,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,4,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,4,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,4,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,4,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,4,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,5,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,1,expected,5,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,5,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,5,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,5,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,5,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,5,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,5,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,5,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,6,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,1,expected,6,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,6,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,6,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,6,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,6,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,6,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,6,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,6,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,7,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,1,expected,7,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,7,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,7,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,7,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,7,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,7,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,7,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,7,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,8,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,1,expected,8,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,8,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,8,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,8,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,8,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,8,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,8,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,8,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,9,0,WAIT,0.9801980198019802,SDec,fixed,False
+SDec,sdec,1,expected,9,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,9,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,9,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,9,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,9,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,9,6,SC2-,0.019801980198019806,SDec,fixed,False
+SDec,sdec,1,expected,9,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,9,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,10,0,WAIT,0.9909812763454563,SDec,fixed,False
+SDec,sdec,1,expected,10,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,10,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,10,3,SC2+,0.00882266444466229,SDec,fixed,False
+SDec,sdec,1,expected,10,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,10,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,10,6,SC2-,0.0001960592098813842,SDec,fixed,False
+SDec,sdec,1,expected,10,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,10,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,11,0,WAIT,0.9992545867663916,SDec,fixed,False
+SDec,sdec,1,expected,11,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,11,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,11,3,SC2+,0.0005435304828394811,SDec,fixed,False
+SDec,sdec,1,expected,11,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,11,5,SC1- SC2+,2.7176524141974054e-05,SDec,fixed,False
+SDec,sdec,1,expected,11,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,11,7,SC1+ SC2-,0.00017470622662697606,SDec,fixed,False
+SDec,sdec,1,expected,11,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,12,0,WAIT,0.9988896448707708,SDec,fixed,False
+SDec,sdec,1,expected,12,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,12,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,12,3,SC2+,0.00039211841976276844,SDec,fixed,False
+SDec,sdec,1,expected,12,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,12,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,12,6,SC2-,0.0007182367094664572,SDec,fixed,False
+SDec,sdec,1,expected,12,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,12,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,13,0,WAIT,0.9999696916314007,SDec,fixed,False
+SDec,sdec,1,expected,13,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,13,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,13,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,13,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,13,5,SC1- SC2+,2.9770219606390047e-05,SDec,fixed,False
+SDec,sdec,1,expected,13,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,13,7,SC1+ SC2-,1.065641570119559e-08,SDec,fixed,False
+SDec,sdec,1,expected,13,8,Both-,5.274925772091817e-07,SDec,fixed,False
+SDec,sdec,1,expected,14,0,WAIT,0.9998940535345124,SDec,fixed,False
+SDec,sdec,1,expected,14,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,14,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,14,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,14,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,14,5,SC1- SC2+,9.21543994662892e-05,SDec,fixed,False
+SDec,sdec,1,expected,14,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,14,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,14,8,Both-,1.379206602127239e-05,SDec,fixed,False
+SDec,sdec,1,expected,15,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,1,expected,15,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,15,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,15,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,15,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,15,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,1,expected,15,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,15,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,1,expected,15,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,0,0,WAIT,0.0,SDec,fixed,False
+SDec,sdec,2,expected,0,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,0,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,0,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,0,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,0,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,0,6,SC2-,1.0,SDec,fixed,False
+SDec,sdec,2,expected,0,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,0,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,1,0,WAIT,0.0,SDec,fixed,False
+SDec,sdec,2,expected,1,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,1,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,1,3,SC2+,1.0,SDec,fixed,False
+SDec,sdec,2,expected,1,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,1,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,1,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,1,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,1,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,2,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,2,expected,2,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,2,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,2,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,2,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,2,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,2,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,2,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,2,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,3,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,2,expected,3,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,3,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,3,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,3,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,3,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,3,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,3,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,3,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,4,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,2,expected,4,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,4,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,4,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,4,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,4,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,4,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,4,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,4,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,5,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,2,expected,5,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,5,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,5,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,5,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,5,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,5,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,5,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,5,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,6,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,2,expected,6,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,6,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,6,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,6,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,6,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,6,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,6,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,6,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,7,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,2,expected,7,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,7,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,7,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,7,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,7,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,7,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,7,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,7,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,8,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,2,expected,8,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,8,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,8,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,8,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,8,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,8,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,8,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,8,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,9,0,WAIT,0.9801980198019802,SDec,fixed,False
+SDec,sdec,2,expected,9,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,9,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,9,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,9,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,9,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,9,6,SC2-,0.019801980198019806,SDec,fixed,False
+SDec,sdec,2,expected,9,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,9,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,10,0,WAIT,0.9909812763454563,SDec,fixed,False
+SDec,sdec,2,expected,10,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,10,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,10,3,SC2+,0.00882266444466229,SDec,fixed,False
+SDec,sdec,2,expected,10,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,10,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,10,6,SC2-,0.0001960592098813842,SDec,fixed,False
+SDec,sdec,2,expected,10,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,10,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,11,0,WAIT,0.9992545867663916,SDec,fixed,False
+SDec,sdec,2,expected,11,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,11,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,11,3,SC2+,0.0005435304828394811,SDec,fixed,False
+SDec,sdec,2,expected,11,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,11,5,SC1- SC2+,2.7176524141974054e-05,SDec,fixed,False
+SDec,sdec,2,expected,11,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,11,7,SC1+ SC2-,0.00017470622662697606,SDec,fixed,False
+SDec,sdec,2,expected,11,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,12,0,WAIT,0.9988896448707708,SDec,fixed,False
+SDec,sdec,2,expected,12,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,12,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,12,3,SC2+,0.00039211841976276844,SDec,fixed,False
+SDec,sdec,2,expected,12,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,12,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,12,6,SC2-,0.0007182367094664572,SDec,fixed,False
+SDec,sdec,2,expected,12,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,12,8,Both-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,13,0,WAIT,0.9999696916314007,SDec,fixed,False
+SDec,sdec,2,expected,13,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,13,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,13,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,13,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,13,5,SC1- SC2+,2.9770219606390047e-05,SDec,fixed,False
+SDec,sdec,2,expected,13,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,13,7,SC1+ SC2-,1.065641570119559e-08,SDec,fixed,False
+SDec,sdec,2,expected,13,8,Both-,5.274925772091817e-07,SDec,fixed,False
+SDec,sdec,2,expected,14,0,WAIT,0.9998940535345124,SDec,fixed,False
+SDec,sdec,2,expected,14,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,14,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,14,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,14,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,14,5,SC1- SC2+,9.21543994662892e-05,SDec,fixed,False
+SDec,sdec,2,expected,14,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,14,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,14,8,Both-,1.379206602127239e-05,SDec,fixed,False
+SDec,sdec,2,expected,15,0,WAIT,1.0,SDec,fixed,False
+SDec,sdec,2,expected,15,1,SC1+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,15,2,SC1-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,15,3,SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,15,4,Both+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,15,5,SC1- SC2+,0.0,SDec,fixed,False
+SDec,sdec,2,expected,15,6,SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,15,7,SC1+ SC2-,0.0,SDec,fixed,False
+SDec,sdec,2,expected,15,8,Both-,0.0,SDec,fixed,False
+Decentralized,dec,0,expected_rsmaa,0,0,WAIT,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,0,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,0,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,0,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,0,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,0,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,0,6,SC2-,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,0,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,0,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,1,0,WAIT,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,1,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,1,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,1,3,SC2+,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,1,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,1,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,1,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,1,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,1,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,2,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,2,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,2,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,2,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,2,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,2,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,2,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,2,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,2,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,3,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,3,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,3,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,3,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,3,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,3,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,3,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,3,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,3,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,4,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,4,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,4,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,4,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,4,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,4,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,4,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,4,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,4,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,5,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,5,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,5,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,5,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,5,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,5,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,5,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,5,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,5,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,6,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,6,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,6,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,6,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,6,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,6,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,6,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,6,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,6,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,7,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,7,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,7,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,7,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,7,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,7,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,7,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,7,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,7,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,8,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,8,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,8,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,8,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,8,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,8,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,8,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,8,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,8,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,9,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,9,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,9,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,9,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,9,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,9,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,9,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,9,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,9,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,10,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,10,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,10,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,10,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,10,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,10,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,10,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,10,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,10,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,11,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,11,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,11,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,11,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,11,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,11,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,11,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,11,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,11,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,12,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,12,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,12,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,12,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,12,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,12,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,12,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,12,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,12,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,13,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,13,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,13,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,13,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,13,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,13,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,13,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,13,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,13,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,14,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,14,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,14,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,14,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,14,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,14,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,14,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,14,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,14,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,15,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,15,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,15,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,15,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,15,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,15,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,15,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,15,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,0,expected_rsmaa,15,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,0,0,WAIT,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,0,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,0,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,0,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,0,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,0,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,0,6,SC2-,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,0,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,0,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,1,0,WAIT,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,1,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,1,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,1,3,SC2+,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,1,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,1,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,1,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,1,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,1,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,2,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,2,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,2,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,2,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,2,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,2,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,2,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,2,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,2,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,3,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,3,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,3,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,3,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,3,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,3,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,3,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,3,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,3,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,4,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,4,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,4,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,4,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,4,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,4,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,4,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,4,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,4,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,5,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,5,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,5,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,5,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,5,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,5,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,5,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,5,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,5,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,6,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,6,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,6,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,6,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,6,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,6,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,6,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,6,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,6,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,7,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,7,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,7,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,7,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,7,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,7,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,7,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,7,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,7,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,8,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,8,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,8,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,8,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,8,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,8,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,8,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,8,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,8,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,9,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,9,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,9,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,9,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,9,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,9,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,9,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,9,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,9,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,10,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,10,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,10,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,10,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,10,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,10,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,10,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,10,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,10,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,11,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,11,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,11,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,11,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,11,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,11,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,11,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,11,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,11,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,12,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,12,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,12,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,12,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,12,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,12,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,12,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,12,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,12,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,13,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,13,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,13,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,13,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,13,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,13,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,13,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,13,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,13,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,14,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,14,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,14,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,14,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,14,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,14,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,14,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,14,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,14,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,15,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,15,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,15,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,15,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,15,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,15,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,15,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,15,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,1,expected_rsmaa,15,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,0,0,WAIT,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,0,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,0,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,0,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,0,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,0,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,0,6,SC2-,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,0,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,0,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,1,0,WAIT,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,1,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,1,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,1,3,SC2+,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,1,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,1,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,1,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,1,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,1,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,2,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,2,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,2,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,2,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,2,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,2,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,2,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,2,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,2,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,3,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,3,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,3,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,3,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,3,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,3,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,3,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,3,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,3,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,4,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,4,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,4,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,4,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,4,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,4,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,4,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,4,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,4,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,5,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,5,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,5,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,5,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,5,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,5,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,5,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,5,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,5,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,6,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,6,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,6,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,6,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,6,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,6,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,6,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,6,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,6,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,7,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,7,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,7,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,7,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,7,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,7,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,7,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,7,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,7,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,8,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,8,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,8,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,8,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,8,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,8,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,8,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,8,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,8,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,9,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,9,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,9,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,9,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,9,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,9,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,9,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,9,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,9,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,10,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,10,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,10,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,10,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,10,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,10,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,10,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,10,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,10,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,11,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,11,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,11,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,11,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,11,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,11,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,11,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,11,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,11,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,12,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,12,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,12,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,12,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,12,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,12,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,12,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,12,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,12,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,13,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,13,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,13,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,13,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,13,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,13,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,13,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,13,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,13,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,14,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,14,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,14,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,14,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,14,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,14,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,14,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,14,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,14,8,Both-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,15,0,WAIT,1.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,15,1,SC1+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,15,2,SC1-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,15,3,SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,15,4,Both+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,15,5,SC1- SC2+,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,15,6,SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,15,7,SC1+ SC2-,0.0,Decentralized,rsmaa,False
+Decentralized,dec,2,expected_rsmaa,15,8,Both-,0.0,Decentralized,rsmaa,False

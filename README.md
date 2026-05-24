@@ -1,109 +1,118 @@
 # RSSDA: Recursive Small-Step Semi-Decentralized A*
 
-A solver for Semi-Decentralized POMDPs (SDec-POMDPs), generalizing the Dec-POMDP/MPOMDP framework with synchronization triggers that enable agents to share information where possible and/or desired.
-
-## Overview
-
-RSSDA solves multi-agent planning problems where:
-- Agents have **partial observability** of the environment
-- Communication is **intermittent** and conditioned on states, joint actions, or joint observations, rather than always-on or never-available
-- **Synchronization triggers** define when agents can share observations
-
-This approach bridges fully centralized (always communicate) and fully decentralized (never communicate) planning in multiagent systems.
+RSSDA solves multiagent planning problems where agents have partial
+observability and can share information only at synchronization points or
+triggered events. It bridges fully centralized planning, semi-decentralized
+planning, and fully decentralized Dec-POMDP planning.
 
 ## Installation
 
-```bash
-git clone https://github.com/yourusername/RSSDA.git
+```powershell
+git clone <repository-url>
 cd RSSDA
-pip install -r requirements.txt
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
 ```
 
-**Requirements:** Python 3.8+, numpy, numba, psutil, pandas
+Requirements are listed in `requirements.txt`.
 
 ## Quick Start
 
-```bash
-# Run Box Pushing domain (horizon 5)
-python benchmarks/sdec_box.py 5
+Run a small tiger instance:
 
-# Run Tiger domain (horizon 4)
-python benchmarks/sdec_tiger.py 4
+```powershell
+.venv\Scripts\python.exe benchmarks\sdec_tiger.py 4
+```
 
-# Run Fire Fighting domain (horizon 6)
-python benchmarks/sdec_fireFight3houses.py 6
+Run the spacecraft conjunction-assessment comparison:
+
+```powershell
+.venv\Scripts\python.exe benchmarks\spacecraftCA\compare_variants.py --variants centralized,sdec,dec --solver-modes fixed --eval-mode expected --tag refined_drift_main
+```
+
+Run the experiment-performance runner. This checks paper-value anchors and
+smoke-tests larger workflows; it is not a full recreation of every experiment
+table entry.
+
+```powershell
+.venv\Scripts\python.exe experiments_runner.py
 ```
 
 ## Benchmark Domains
 
 | Domain | Description | Agents | States |
 |--------|-------------|--------|--------|
-| **Box Pushing** | Coordinate to push boxes on a grid | 2 | 100 |
-| **Tiger** | Classic door-opening coordination problem | 2 | 2 |
-| **Fire Fighting** | Extinguish fires across three houses | 2 | 432 |
-| **Mars Rovers** | Coordinate rock sampling and data transmission | 2 | 256 |
-| **Maritime MEDEVAC** | Helicopter-ship patient rescue coordination | 2 | 512 |
-| **Labyrinth** | Graph search with configurable sync triggers; tractable for approximate solvers | 2 | Variable |
+| Box Pushing | Coordinate to push boxes on a grid | 2 | 100 |
+| Tiger | Classic door-opening coordination problem | 2 | 2 |
+| Fire Fighting | Extinguish fires across three houses | 2 | 432 |
+| Mars Rovers | Coordinate rock sampling and data transmission | 2 | 256 |
+| Maritime MEDEVAC | Helicopter-ship patient rescue coordination | 2 | 512 |
+| Labyrinth | Graph search with configurable sync triggers | 2 | Variable |
+| SpacecraftCA | Spacecraft conjunction assessment with centralized, SDec, and Dec information structures | 2 | 1441 |
 
-## Configuration
+## Solver Configuration
 
-Each benchmark supports different execution modes via `TRIGGER_MODE`:
-
-- `"centralized"` - Agents always synchronized (upper bound)
-- `"semi"` - Synchronization at trigger states (default)
-- `"decentralized"` - No synchronization (lower bound)
-- `"decentralized_RSMAA"` - Baseline RS-MAA* algorithm
-
-Solver parameters can be configured via `RSSDAConfig`, and include:
+`RSSDAConfig` controls exact and approximate search:
 
 ```python
 config = RSSDAConfig(
-    algorithm="approximate",    # "exact" or "approximate"
-    iter_limit=2000,            # Max policy nodes per stage
-    rec_limit=1,                # Recursion depth
-    heuristic_type="HYBRID",    # "QMDP", "HYBRID", or "POMDP"
-    TI1=True,                   # [approximation] Interleaved planning and search
-    TI2=True,                   # [approximation] Pruning
-    TI3=True,                   # [approximation] Tail heuristics
-    TI4=True,                   # [approximation] Lossy clustering via sliding windows
+    maxh=6,
+    algorithm="approximate",
+    iter_limit=2000,
+    rec_limit=2,
+    heuristic_type="HYBRID",
+    TI1=True,
+    TI2=True,
+    TI3=True,
+    TI4=True,
 )
 ```
 
+Approximation techniques:
+
+- `TI1`: interleaved planning/execution.
+- `TI2`: progress-based pruning.
+- `TI3`: recursive tail approximation.
+- `TI4`: memory-bounded clustering.
+
 ## Project Structure
 
-```
+```text
 RSSDA/
-├── RSSDA.py                 # Core SD-POMDP solver
-├── requirements.txt
-├── baselines/
-│   ├── decPOMDP.py          # RS-MAA* baseline (fully decentralized)
-│   └── parser_decPOMDP.py
-├── benchmarks/
-│   ├── sdec_box.py
-│   ├── sdec_tiger.py
-│   ├── sdec_mars.py
-│   ├── sdec_fireFight3houses.py
-│   ├── sdec_labyrinth.py
-│   ├── maritimemedevac.py
-│   └── *.data               # Domain specification files
-├── labyrinth_benchmarks/    # Labyrinth domain data files
-└── DARPA_SubT_sites_graphics/    # DARPA subterannean challenge graphs
+|-- RSSDA.py                 # Core SDec-POMDP solver
+|-- experiments_runner.py
+|-- requirements.txt
+|-- baselines/
+|   |-- decPOMDP.py          # RS-MAA* baseline
+|   `-- parser_decPOMDP.py
+|-- benchmarks/
+|   |-- sdec_box.py
+|   |-- sdec_tiger.py
+|   |-- sdec_mars.py
+|   |-- sdec_fireFight3houses.py
+|   |-- sdec_labyrinth.py
+|   |-- labyrinth_benchmarks/    # Labyrinth domain data files
+|   |-- maritimemedevac.py
+|   `-- spacecraftCA/        # Spacecraft conjunction-assessment benchmark
 ```
+
+## SpacecraftCA
+
+The cleaned spacecraft benchmark is documented in
+`benchmarks/spacecraftCA/README.md`. It compares centralized, semi-decentralized,
+and fully decentralized policies under shared dynamics and reward models.
 
 ## Citation
 
-If you use this code in your research, please cite:
-
 ```bibtex
-@inproceedings{alhusseini2025,
+@inproceedings{alhusseini2026,
   title={A Semi-Decentralized Approach to Multiagent Control},
-  author={Al-Husseini, Mahdi and Wray, Kyle H and Kochenderfer, Mykel J},
-  booktitle={2026 International Conference on Autonomous Agents and Multiagent Systems (AAMAS)},
-  year={2026},
-  organization={}
+  author={Al-Husseini, Mahdi and Wray, Kyle H. and Kochenderfer, Mykel J.},
+  booktitle={International Conference on Autonomous Agents and Multiagent Systems},
+  year={2026}
 }
 ```
 
 ## License
 
-MIT License - see individual source files for details.
+MIT License. See source files for details.
