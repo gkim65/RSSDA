@@ -23,7 +23,7 @@ Synchronization Triggers:
       * TRIG_DECENTRAL: Never synchronized (fully decentralized)
 
 Usage:
-    python sdec_mars_approx.py <horizon> [maxit] [ie_min2] [alpha]
+    python benchmarks/sdec_mars.py <horizon> [maxit] [ie_min2] [alpha]
 
     Arguments:
         horizon     Planning horizon
@@ -64,7 +64,7 @@ except ImportError:
 
 # Import original decPOMDP for fully decentralized RSMAA mode
 try:
-    from decPOMDP import DecPOMDP as OriginalDecPOMDP, MemoryLimitExceeded as DecPOMDPMemoryLimitExceeded
+    from baselines.decPOMDP import DecPOMDP as OriginalDecPOMDP, MemoryLimitExceeded as DecPOMDPMemoryLimitExceeded
 except ImportError:
     print("Warning: Could not import original decPOMDP. decentralized_RSMAA mode may not work.")
     OriginalDecPOMDP = None
@@ -112,7 +112,7 @@ def mars_chebyshev1_triggers():
 COM_MODE = mars_right_band_triggers()
 
 # --- Core Algorithm ---
-ALGORITHM = "approximate"             # "exact" or "approximate" (enables TI approximations)
+ALGORITHM = "exact"             # "exact" or "approximate" (enables TI approximations)
 
 # --- Heuristic Type ---
 # Controls upper-bound heuristic for A* search guidance.
@@ -120,7 +120,7 @@ ALGORITHM = "approximate"             # "exact" or "approximate" (enables TI app
 #   "POMDP"  - Tight/exact: full centralized POMDP value function
 #   "HYBRID" - Runs exact POMDP for first HYBRID_R steps, then QMDP
 # Rule of thumb: Use "POMDP" for exact algorithm, "QMDP" or "HYBRID" for approximate.
-HEURISTIC_TYPE = "HYBRID"
+HEURISTIC_TYPE = "POMDP"
 HYBRID_R = 1                    # Steps of exact POMDP before switching to QMDP (HYBRID mode only)
 
 # --- Decentralized Heuristic Search ---
@@ -133,9 +133,9 @@ IE_MIN2 = 3                     # Min depth of information-sharing stages for de
 # --- Approximation Techniques (TI Flags) ---
 # Enable these for faster but approximate solutions. Requires ALGORITHM = "approximate".
 TI1 = False  # Interleaving Planning/Execution: prune branches via consensus voting
-TI2 = True  # Progress-based Pruning: limit per-entity exploration budget
-TI3 = True  # Tail Approximation: use heuristics for final REC_LIMIT stages
-TI4 = True  # Max Clustering: cluster based on L1 distance between beliefs, weighted by probability mass
+TI2 = False  # Progress-based Pruning: limit per-entity exploration budget
+TI3 = False  # Tail Approximation: use heuristics for final REC_LIMIT stages
+TI4 = False  # Max Clustering: cluster based on L1 distance between beliefs, weighted by probability mass
 
 # --- TI1: Interleaving Parameters ---
 # Consensus voting among top nodes to detect centralized stages early.
@@ -168,7 +168,7 @@ MAX_CLUSTERS = 6
 class MarsConfig:
     def __init__(self):
         # CLI Argument Parsing (uses USER CONFIGURATION as defaults)
-        # Usage: python sdec_mars_approx.py <horizon> [maxit] [IEmin2] [alpha]
+        # Usage: python benchmarks/sdec_mars.py <horizon> [maxit] [IEmin2] [alpha]
         self.horizon = int(sys.argv[1])
         self.maxit = int(sys.argv[2]) if len(sys.argv) > 2 else MAXIT
         self.ie_min2 = int(sys.argv[3]) if len(sys.argv) > 3 else IE_MIN2
@@ -700,7 +700,7 @@ def run_mars_decentralized_rsmaa(config, verbose=True):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python sdec_mars_approx.py <horizon> [maxit] [IEmin2] [alpha]")
+        print("Usage: python benchmarks/sdec_mars.py <horizon> [maxit] [IEmin2] [alpha]")
         sys.exit(1)
 
     config = MarsConfig()

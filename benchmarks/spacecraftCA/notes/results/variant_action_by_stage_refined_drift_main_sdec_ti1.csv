@@ -1,0 +1,433 @@
+variant,matrix_variant,init_bin,eval_mode,stage,joint_action,action_label,action_prob,base_variant,solver_mode,ti1_enabled
+SDec TI1,sdec,0,expected_interleaved,0,0,WAIT,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,0,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,0,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,0,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,0,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,0,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,0,6,SC2-,1.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,0,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,0,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,1,0,WAIT,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,1,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,1,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,1,3,SC2+,1.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,1,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,1,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,1,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,1,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,1,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,2,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,2,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,2,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,2,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,2,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,2,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,2,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,2,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,2,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,3,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,3,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,3,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,3,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,3,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,3,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,3,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,3,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,3,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,4,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,4,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,4,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,4,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,4,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,4,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,4,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,4,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,4,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,5,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,5,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,5,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,5,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,5,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,5,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,5,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,5,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,5,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,6,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,6,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,6,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,6,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,6,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,6,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,6,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,6,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,6,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,7,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,7,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,7,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,7,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,7,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,7,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,7,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,7,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,7,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,8,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,8,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,8,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,8,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,8,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,8,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,8,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,8,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,8,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,9,0,WAIT,0.9801980198019802,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,9,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,9,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,9,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,9,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,9,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,9,6,SC2-,0.019801980198019806,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,9,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,9,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,10,0,WAIT,0.9909812763454563,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,10,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,10,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,10,3,SC2+,0.009018723654543672,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,10,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,10,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,10,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,10,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,10,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,11,0,WAIT,0.9992545867663916,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,11,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,11,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,11,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,11,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,11,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,11,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,11,7,SC1+ SC2-,0.0007454132336084311,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,11,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,12,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,12,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,12,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,12,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,12,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,12,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,12,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,12,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,12,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,13,0,WAIT,0.9999852393419087,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,13,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,13,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,13,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,13,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,13,5,SC1- SC2+,1.476065809125606e-05,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,13,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,13,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,13,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,14,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,14,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,14,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,14,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,14,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,14,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,14,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,14,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,14,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,15,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,15,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,15,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,15,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,15,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,15,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,15,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,15,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,0,expected_interleaved,15,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,0,0,WAIT,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,0,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,0,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,0,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,0,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,0,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,0,6,SC2-,1.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,0,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,0,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,1,0,WAIT,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,1,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,1,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,1,3,SC2+,1.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,1,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,1,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,1,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,1,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,1,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,2,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,2,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,2,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,2,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,2,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,2,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,2,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,2,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,2,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,3,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,3,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,3,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,3,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,3,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,3,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,3,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,3,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,3,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,4,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,4,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,4,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,4,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,4,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,4,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,4,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,4,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,4,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,5,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,5,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,5,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,5,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,5,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,5,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,5,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,5,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,5,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,6,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,6,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,6,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,6,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,6,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,6,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,6,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,6,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,6,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,7,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,7,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,7,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,7,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,7,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,7,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,7,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,7,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,7,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,8,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,8,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,8,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,8,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,8,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,8,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,8,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,8,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,8,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,9,0,WAIT,0.9801980198019802,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,9,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,9,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,9,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,9,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,9,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,9,6,SC2-,0.019801980198019806,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,9,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,9,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,10,0,WAIT,0.9909812763454563,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,10,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,10,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,10,3,SC2+,0.009018723654543674,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,10,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,10,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,10,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,10,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,10,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,11,0,WAIT,0.9992545867663916,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,11,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,11,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,11,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,11,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,11,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,11,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,11,7,SC1+ SC2-,0.0007454132336084311,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,11,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,12,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,12,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,12,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,12,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,12,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,12,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,12,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,12,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,12,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,13,0,WAIT,0.9999852393419087,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,13,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,13,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,13,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,13,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,13,5,SC1- SC2+,1.4760658091256066e-05,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,13,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,13,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,13,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,14,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,14,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,14,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,14,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,14,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,14,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,14,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,14,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,14,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,15,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,15,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,15,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,15,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,15,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,15,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,15,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,15,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,1,expected_interleaved,15,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,0,0,WAIT,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,0,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,0,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,0,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,0,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,0,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,0,6,SC2-,1.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,0,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,0,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,1,0,WAIT,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,1,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,1,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,1,3,SC2+,1.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,1,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,1,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,1,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,1,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,1,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,2,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,2,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,2,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,2,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,2,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,2,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,2,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,2,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,2,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,3,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,3,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,3,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,3,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,3,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,3,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,3,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,3,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,3,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,4,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,4,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,4,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,4,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,4,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,4,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,4,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,4,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,4,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,5,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,5,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,5,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,5,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,5,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,5,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,5,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,5,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,5,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,6,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,6,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,6,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,6,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,6,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,6,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,6,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,6,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,6,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,7,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,7,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,7,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,7,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,7,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,7,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,7,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,7,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,7,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,8,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,8,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,8,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,8,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,8,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,8,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,8,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,8,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,8,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,9,0,WAIT,0.9801980198019802,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,9,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,9,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,9,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,9,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,9,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,9,6,SC2-,0.019801980198019806,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,9,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,9,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,10,0,WAIT,0.9909812763454563,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,10,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,10,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,10,3,SC2+,0.009018723654543674,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,10,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,10,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,10,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,10,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,10,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,11,0,WAIT,0.9992545867663916,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,11,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,11,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,11,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,11,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,11,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,11,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,11,7,SC1+ SC2-,0.0007454132336084311,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,11,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,12,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,12,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,12,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,12,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,12,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,12,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,12,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,12,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,12,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,13,0,WAIT,0.9999852393419087,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,13,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,13,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,13,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,13,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,13,5,SC1- SC2+,1.4760658091256066e-05,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,13,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,13,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,13,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,14,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,14,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,14,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,14,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,14,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,14,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,14,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,14,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,14,8,Both-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,15,0,WAIT,1.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,15,1,SC1+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,15,2,SC1-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,15,3,SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,15,4,Both+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,15,5,SC1- SC2+,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,15,6,SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,15,7,SC1+ SC2-,0.0,SDec,interleaved,True
+SDec TI1,sdec,2,expected_interleaved,15,8,Both-,0.0,SDec,interleaved,True

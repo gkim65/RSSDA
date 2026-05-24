@@ -1,0 +1,69 @@
+# Python runtime artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.nbc
+*.nbi
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments and local tooling
+.venv/
+RSSDA2.venv/
+venv/
+env/
+.env
+.env.*
+.vscode/
+.idea/
+.claude/
+
+# Generated experiment outputs
+/results/
+/policy_reports/
+/snapshots/
+/heuristic_data/
+
+# Legacy root-level Labyrinth artifacts; canonical inputs live under benchmarks/labyrinth_benchmarks/
+/labyrinth_benchmarks/
+/labyrinth_cache/
+benchmarks/labyrinth_cache/
+
+# Large generated Labyrinth scale-ups are kept local; GitHub rejects files >100 MB.
+benchmarks/labyrinth_benchmarks/labyrinth_*_020.data
+benchmarks/labyrinth_benchmarks/labyrinth_*_025.data
+benchmarks/spacecraftCA/notes/results/*
+!benchmarks/spacecraftCA/notes/results/variant_expected_refined_drift_main.csv
+!benchmarks/spacecraftCA/notes/results/variant_action_by_stage_refined_drift_main.csv
+!benchmarks/spacecraftCA/notes/results/variant_burn_timing_refined_drift_main.csv
+!benchmarks/spacecraftCA/notes/results/variant_expected_refined_drift_main_sdec_ti1.csv
+!benchmarks/spacecraftCA/notes/results/variant_action_by_stage_refined_drift_main_sdec_ti1.csv
+!benchmarks/spacecraftCA/notes/results/variant_burn_timing_refined_drift_main_sdec_ti1.csv
+benchmarks/spacecraftCA/notes/figures/*
+!benchmarks/spacecraftCA/notes/figures/variant_comparison_refined_drift_main.png
+!benchmarks/spacecraftCA/notes/figures/burn_timing_refined_drift_main.png
+!benchmarks/spacecraftCA/notes/figures/action_schedule_refined_drift_main.png
+!benchmarks/spacecraftCA/notes/figures/variant_comparison_refined_drift_main_sdec_ti1.png
+!benchmarks/spacecraftCA/notes/figures/burn_timing_refined_drift_main_sdec_ti1.png
+!benchmarks/spacecraftCA/notes/figures/action_schedule_refined_drift_main_sdec_ti1.png
+
+# Generated spacecraft matrix caches
+benchmarks/spacecraftCA/spacecraft_matrices_cache_*.npz
+
+# Local binary/reference material
+/literature/
+/drawings/
+/DARPA_SubT_sites_graphics/
+/miscellaneous/
+/archives/
+
+# Common OS/editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.log

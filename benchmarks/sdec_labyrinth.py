@@ -24,7 +24,7 @@ Key Features:
     - Support for custom synchronization trigger sets
 
 Usage:
-    python sdec_labyrinth_approx.py <benchmark_id> [options]
+    python benchmarks/sdec_labyrinth.py <benchmark_id> [options]
 
     Options:
         --horizon H         Planning horizon (default: from benchmark)
@@ -50,9 +50,9 @@ Experiment Reproducibility (Configuration Support):
         max_clusters=2,               # k in paper for sliding window, modify as desired
 
 Examples (ensure configuration modified as desired, per the above):  
-    - "python sdec_labyrinth_approx.py chamber_3d_015 9": runs chamber_3d_015 benchmark for horizon 9, one time
-    - "python sdec_labyrinth_approx.py 1 9 5 --noisy": runs the noisy version of Labyrinth 1 for horizon 9, five times (with statistical output)
-    - "python sdec_labyrinth_approx.py 5 6 2 --fullsim --decentralized": runs a Labyrinth 5 for horizon 6 for two full loops of iterations through every possible target node
+    - "python benchmarks/sdec_labyrinth.py chamber_3d_015 9": runs chamber_3d_015 benchmark for horizon 9, one time
+    - "python benchmarks/sdec_labyrinth.py 1 9 5 --noisy": runs the noisy version of Labyrinth 1 for horizon 9, five times (with statistical output)
+    - "python benchmarks/sdec_labyrinth.py 5 6 2 --fullsim --decentralized": runs a Labyrinth 5 for horizon 6 for two full loops of iterations through every possible target node
 
 Important Notes:
     Exact solvers should almost always use tight heuristics (heuristic_type = "POMDP")
@@ -68,7 +68,10 @@ import time
 import random
 import math
 import json
+import logging
 from array import array
+
+_log = logging.getLogger(__name__)
 
 # Add parent directories to path for imports
 _script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -80,16 +83,18 @@ sys.path.insert(0, os.path.join(_root_dir, 'baselines'))  # For decPOMDP.py
 try:
     from RSSDA import SDecPOMDP, SDecPOMDPModel, RSSDAConfig, int_tuple, MemoryLimitExceeded
 except ImportError:
-    print("Warning: Could not import SDecPOMDP solver. Running in test mode.")
+    _log.debug("Could not import legacy SDecPOMDP solver; active wrappers remain available.")
     SDecPOMDP = None
     SDecPOMDPModel = None
+    RSSDAConfig = None
     int_tuple = tuple
+    MemoryLimitExceeded = RuntimeError
 
 # Import original decPOMDP for fully decentralized mode
 try:
-    from decPOMDP import DecPOMDP as OriginalDecPOMDP, MemoryLimitExceeded as DecPOMDPMemoryLimitExceeded
+    from baselines.decPOMDP import DecPOMDP as OriginalDecPOMDP, MemoryLimitExceeded as DecPOMDPMemoryLimitExceeded
 except ImportError:
-    print("Warning: Could not import original decPOMDP. Decentralized mode may not work.")
+    _log.debug("Could not import legacy decPOMDP solver.")
     OriginalDecPOMDP = None
     DecPOMDPMemoryLimitExceeded = None
 
@@ -106,10 +111,12 @@ try:
         apply_sync_knowledge_propagation,
         apply_noisy_detection,
         load_cached_noisy_labyrinth,
-        precompute_noisy_all
+        precompute_noisy_all,
+        load_cached_rescue_assist_labyrinth,
+        precompute_rescue_assist_all,
     )
 except ImportError:
-    print("Warning: Could not import labyrinth_cache. Cache functionality disabled.")
+    _log.debug("Could not import labyrinth_cache helpers.")
     load_cached_labyrinth = None
     apply_sync_knowledge_propagation = None
     apply_noisy_detection = None
@@ -121,6 +128,8 @@ except ImportError:
     create_loader_from_cache = None
     load_cached_noisy_labyrinth = None
     precompute_noisy_all = None
+    load_cached_rescue_assist_labyrinth = None
+    precompute_rescue_assist_all = None
 
 # ============================================================================
 #                           USER CONFIGURATION
@@ -129,7 +138,7 @@ except ImportError:
 # ============================================================================
 
 # --- Core Algorithm ---
-ALGORITHM = "approximate"       # "exact" or "approximate" (enables TI approximations)
+ALGORITHM = "exact"       # "exact" or "approximate" (enables TI approximations)
 
 # --- Heuristic Type ---
 # Controls upper-bound heuristic for A* search guidance.
@@ -150,9 +159,9 @@ IE_MIN2 = 3                     # Min depth of information-sharing stages for de
 # --- Approximation Techniques (TI Flags) ---
 # Enable these for faster but approximate solutions. Requires ALGORITHM = "approximate".
 TI1 = False  # Interleaving Planning/Execution: prune branches via consensus voting
-TI2 = True   # Progress-based Pruning: limit per-entity exploration budget
-TI3 = True   # Tail Approximation: use heuristics for final REC_LIMIT stages
-TI4 = True  # Max Clustering: cluster based on L1 distance between beliefs, weighted by probability mass
+TI2 = False   # Progress-based Pruning: limit per-entity exploration budget
+TI3 = False   # Tail Approximation: use heuristics for final REC_LIMIT stages
+TI4 = False  # Max Clustering: cluster based on L1 distance between beliefs, weighted by probability mass
 
 # --- TI1: Interleaving Parameters ---
 # Consensus voting among top nodes to detect centralized stages early.
@@ -183,14 +192,18 @@ MAX_CLUSTERS = 2
 # Noisy mode helpers
 # ==========================================
 
-def format_noisy_action(act, act_per_agent):
-    """Format action name for drilling mode (has DRILL action)."""
+def format_noisy_action(act, act_per_agent, commitment_mode="drilling"):
+    """Format action name for stochastic commitment modes."""
     if act == 0:
         return "WAIT"
+    if commitment_mode == "rescue_assist":
+        if act == act_per_agent - 2:
+            return "RESCUE"
+        if act == act_per_agent - 1:
+            return "ASSIST"
     elif act == act_per_agent - 1:
         return "DRILL"
-    else:
-        return f"MV({act})"
+    return f"MV({act})"
 
 def decode_noisy_obs(obs, num_nodes):
     """Decode noisy observation into (position, sensor_str)."""
@@ -530,13 +543,13 @@ def generate_policy_visualization(policy, clustering, cent_vector, cen_dists_map
 # ==========================================
 
 # Standard usage (uses cached data, auto-generates if missing)
-# python sdec_labyrinth_approx.py 1 20
+# python benchmarks/sdec_labyrinth.py 1 20
 
 # Multiple simulations
-# python sdec_labyrinth_approx.py 1 20 5
+# python benchmarks/sdec_labyrinth.py 1 20 5
 
 # With verbose output
-# python sdec_labyrinth_approx.py 1 20 --verbose
+# python benchmarks/sdec_labyrinth.py 1 20 --verbose
 
 # ==========================================
 # Configuration & Constants
@@ -546,21 +559,27 @@ class LabyrinthConfig:
     # Default detection probability for drilling mode (modify this value for testing)
     DEFAULT_DETECTION_PROB = 0.90
 
-    def __init__(self, bid, horizon, maxit, ie_min2, alpha, replan_at_all_syncs=False, decentralized=False, centralized=False, noisy=False, detection_prob=None):
+    def __init__(self, bid, horizon, maxit, ie_min2, alpha, replan_at_all_syncs=False, decentralized=False, centralized=False, noisy=False, detection_prob=None, seed=None, rescue_assist=False):
         self.bid = bid
         self.horizon = horizon
         self.maxit = maxit
         self.ie_min2 = ie_min2
         self.alpha = alpha
+        self.seed = seed
         self.replan_at_all_syncs = replan_at_all_syncs
         self.decentralized = decentralized
         self.centralized = centralized
-        self.noisy = noisy
+        self.rescue_assist = bool(rescue_assist)
+        self.noisy = bool(noisy or self.rescue_assist)
+        self.commitment_mode = "rescue_assist" if self.rescue_assist else ("drilling" if self.noisy else "deterministic")
 
         # Set detection probability
-        if noisy:
+        if self.noisy:
             self.detection_prob = detection_prob if detection_prob is not None else self.DEFAULT_DETECTION_PROB
-            print(f"DRILLING mode enabled: detection probability = {self.detection_prob}")
+            if self.rescue_assist:
+                print(f"RESCUE/ASSIST mode enabled: detection probability = {self.detection_prob}")
+            else:
+                print(f"DRILLING mode enabled: detection probability = {self.detection_prob}")
         else:
             self.detection_prob = 1.0  # deterministic detection when not noisy
 
@@ -589,7 +608,7 @@ class LabyrinthConfig:
             self.obs_trigger = []
             print(f"Running in CENTRALIZED mode (all {self.nstates - 1} non-sink states are sync triggers)")
         else:
-            trigger_path = os.path.join(_root_dir, "labyrinth_benchmarks", "trigger_config.json")
+            trigger_path = os.path.join(_script_dir, "labyrinth_benchmarks", "trigger_config.json")
             if not os.path.exists(trigger_path):
                 raise FileNotFoundError(f"Trigger config not found: {trigger_path}")
 
@@ -630,21 +649,20 @@ class LabyrinthConfig:
 
         Falls back to base file if mode-specific file doesn't exist.
         """
-        base_file = os.path.join(_root_dir, "labyrinth_benchmarks", f"labyrinth_{self.bid}.data")
+        bench_dir = os.path.join(_script_dir, "labyrinth_benchmarks")
 
         if self.centralized:
-            mode_file = os.path.join(_root_dir, "labyrinth_benchmarks", f"labyrinth_{self.bid}_centralized.data")
+            mode_file = os.path.join(bench_dir, f"labyrinth_{self.bid}_centralized.data")
             if os.path.exists(mode_file):
                 self.uses_mode_specific_data = True
                 return mode_file
         elif not self.decentralized:  # semi-decentralized (default)
-            mode_file = os.path.join(_root_dir, "labyrinth_benchmarks", f"labyrinth_{self.bid}_semi_decentralized.data")
+            mode_file = os.path.join(bench_dir, f"labyrinth_{self.bid}_semi_decentralized.data")
             if os.path.exists(mode_file):
                 self.uses_mode_specific_data = True
                 return mode_file
 
-        # Decentralized mode or fallback to base file
-        return base_file
+        return os.path.join(bench_dir, f"labyrinth_{self.bid}.data")
 
     def load_metadata(self):
         filename = self._get_data_file_path()
@@ -842,7 +860,7 @@ class LabyrinthLoader:
 
     def load_data(self):
         # Use the data file path from config (supports mode-specific files)
-        default_path = os.path.join(_root_dir, "labyrinth_benchmarks", f"labyrinth_{self.c.bid}.data")
+        default_path = os.path.join(_script_dir, "labyrinth_benchmarks", f"labyrinth_{self.c.bid}.data")
         filename = getattr(self.c, 'data_file_path', default_path)
         print(f"Loading {filename}...")
 
@@ -1142,6 +1160,9 @@ def run_labyrinth(config, verbose=True, fixed_target_idx=None, visualize_policy=
         print("DecPOMDP  solver not available. Exiting.")
         return 0
 
+    if getattr(config, "seed", None) is not None:
+        random.seed(int(config.seed))
+
     # Try to load cache first (fast path)
     cache_data = None
     qmdp_data = None
@@ -1153,13 +1174,24 @@ def run_labyrinth(config, verbose=True, fixed_target_idx=None, visualize_policy=
 
     if use_cache:
         if config.noisy and load_cached_noisy_labyrinth is not None:
-            # Load from noisy cache (has different action/observation spaces)
-            cache_data = load_cached_noisy_labyrinth(config.bid, config.detection_prob)
-            if cache_data is None:
-                if verbose:
-                    print(f"Noisy cache not found for labyrinth {config.bid}. Generating (one-time cost)...")
-                precompute_noisy_all(config.bid, config.detection_prob)
+            # Load from stochastic commitment cache (has different action/observation spaces)
+            commitment_mode = getattr(config, "commitment_mode", "drilling")
+            if commitment_mode == "rescue_assist":
+                if load_cached_rescue_assist_labyrinth is None:
+                    raise ImportError("labyrinth_cache rescue/assist helpers unavailable")
+                cache_data = load_cached_rescue_assist_labyrinth(config.bid, config.detection_prob)
+                if cache_data is None:
+                    if verbose:
+                        print(f"Rescue/assist cache not found for labyrinth {config.bid}. Generating (one-time cost)...")
+                    precompute_rescue_assist_all(config.bid, config.detection_prob)
+                    cache_data = load_cached_rescue_assist_labyrinth(config.bid, config.detection_prob)
+            else:
                 cache_data = load_cached_noisy_labyrinth(config.bid, config.detection_prob)
+                if cache_data is None:
+                    if verbose:
+                        print(f"Noisy cache not found for labyrinth {config.bid}. Generating (one-time cost)...")
+                    precompute_noisy_all(config.bid, config.detection_prob)
+                    cache_data = load_cached_noisy_labyrinth(config.bid, config.detection_prob)
             used_noisy_cache = True
             # No QMDP cache for noisy (would need separate precomputation)
             qmdp_data = None
@@ -1407,7 +1439,9 @@ def run_labyrinth(config, verbose=True, fixed_target_idx=None, visualize_policy=
         u1, u2, t_idx = loader.state_to_tuple(true_state)
         target_node = loader.targets[t_idx] if t_idx >= 0 and t_idx < len(loader.targets) else -1
         if verbose:
-            print(f"Drilling Labyrinth {active_config.bid} | Start: U1={u1} U2={u2} Target={target_node}")
+            commitment_mode = getattr(active_config, 'commitment_mode', 'drilling')
+            label = "Rescue/Assist Labyrinth" if commitment_mode == "rescue_assist" else "Drilling Labyrinth"
+            print(f"{label} {active_config.bid} | Start: U1={u1} U2={u2} Target={target_node}")
     else:
         u1, u2, t_idx, found1, found2 = loader.state_to_tuple(true_state)
         target_node = loader.targets[t_idx] if t_idx >= 0 and t_idx < len(loader.targets) else -1
@@ -1534,16 +1568,32 @@ def run_labyrinth(config, verbose=True, fixed_target_idx=None, visualize_policy=
 
             # Check if drilling mode (3-tuple state) vs standard mode (5-tuple state)
             is_drilling_mode = getattr(loader, 'drilling_mode', False)
+            commitment_mode = getattr(active_config, 'commitment_mode', 'drilling')
+            rescue_terminal_success = (
+                is_drilling_mode
+                and commitment_mode == "rescue_assist"
+                and next_state == active_config.sink_state
+                and step_reward > 0
+            )
+            rescue_unassisted_reward = float(getattr(
+                active_config, 'rescue_unassisted_reward', 80.0))
 
             if is_drilling_mode:
                 # Drilling mode: state = (u1, u2, t_idx) - NO found flags
                 u1, u2, t_idx = loader.state_to_tuple(true_state)
                 k_str = ""  # No knowledge flags in drilling mode
 
-                if step_reward > 50:
-                    next_state_str = f"[DRILL SUCCESS +100]"
+                if rescue_terminal_success:
+                    if math.isclose(float(step_reward), rescue_unassisted_reward, rel_tol=0.0, abs_tol=1e-9):
+                        next_state_str = f"[RESCUE UNASSISTED +{float(step_reward):g}]"
+                    else:
+                        next_state_str = f"[RESCUE SUCCESS +{float(step_reward):g}]"
+                elif step_reward > 50:
+                    label = "RESCUE" if commitment_mode == "rescue_assist" else "DRILL"
+                    next_state_str = f"[{label} SUCCESS +{float(step_reward):g}]"
                 elif step_reward < -150:
-                    next_state_str = f"[DRILL FAILURE -200]"
+                    label = "RESCUE" if commitment_mode == "rescue_assist" else "DRILL"
+                    next_state_str = f"[{label} FAILURE -200]"
                 elif next_state == active_config.sink_state:
                     next_state_str = "Sink"
                 else:
@@ -1564,42 +1614,57 @@ def run_labyrinth(config, verbose=True, fixed_target_idx=None, visualize_policy=
                     next_state_str = f"({nu1},{nu2})"
                     k_str = f"K:({nf1},{nf2})"
 
-                # Format action names (different for drilling mode which has DRILL)
-                if used_noisy_cache:
-                    act1_str = format_noisy_action(act1, active_config.act_per_agent)
-                    act2_str = format_noisy_action(act2, active_config.act_per_agent)
-                    # Decode observations: obs = position * 2 + sensor
-                    pos1, sens1 = decode_noisy_obs(o1, loader.num_nodes)
-                    pos2, sens2 = decode_noisy_obs(o2, loader.num_nodes)
-                    obs_str = f"({pos1}{sens1},{pos2}{sens2})"
-                else:
-                    act1_str = "WAIT" if act1 == 0 else f"MOVE({act1})"
-                    act2_str = "WAIT" if act2 == 0 else f"MOVE({act2})"
-                    # Decode observations: obs = position * 2 + found
-                    pos1, found1_obs = decode_deterministic_obs(o1)
-                    pos2, found2_obs = decode_deterministic_obs(o2)
-                    found1_str = "F" if found1_obs == 1 else "-"
-                    found2_str = "F" if found2_obs == 1 else "-"
-                    obs_str = f"({pos1}{found1_str},{pos2}{found2_str})"
+            # Format action names (different for stochastic commitment modes)
+            if used_noisy_cache:
+                act1_str = format_noisy_action(act1, active_config.act_per_agent, commitment_mode)
+                act2_str = format_noisy_action(act2, active_config.act_per_agent, commitment_mode)
+                # Decode observations: obs = position * 2 + sensor
+                pos1, sens1 = decode_noisy_obs(o1, loader.num_nodes)
+                pos2, sens2 = decode_noisy_obs(o2, loader.num_nodes)
+                obs_str = f"({pos1}{sens1},{pos2}{sens2})"
+            else:
+                act1_str = "WAIT" if act1 == 0 else f"MOVE({act1})"
+                act2_str = "WAIT" if act2 == 0 else f"MOVE({act2})"
+                # Decode observations: obs = position * 2 + found
+                pos1, found1_obs = decode_deterministic_obs(o1)
+                pos2, found2_obs = decode_deterministic_obs(o2)
+                found1_str = "F" if found1_obs == 1 else "-"
+                found2_str = "F" if found2_obs == 1 else "-"
+                obs_str = f"({pos1}{found1_str},{pos2}{found2_str})"
 
-                step_type = '[SYNC]' if is_centralized_step else '[DEC]'
-                print(f"Step {step_global} {step_type}: Pos({u1},{u2})->{next_state_str} "
-                      f"[{act1_str},{act2_str}] {k_str} Obs:{obs_str} Rew:{step_reward} S':{next_state}")
+            step_type = '[SYNC]' if is_centralized_step else '[DEC]'
+            print(f"Step {step_global} {step_type}: Pos({u1},{u2})->{next_state_str} "
+                  f"[{act1_str},{act2_str}] {k_str} Obs:{obs_str} Rew:{step_reward} S':{next_state}")
+
+            if rescue_terminal_success:
+                if verbose:
+                    if math.isclose(float(step_reward), rescue_unassisted_reward, rel_tol=0.0, abs_tol=1e-9):
+                        print("RESCUE UNASSISTED: Target reached without valid assist.")
+                    else:
+                        print("RESCUE SUCCESS: Target rescued with assist.")
+                termination_flag = True
+                break
 
             if step_reward > 50:
                 if verbose:
                     is_drilling_mode = getattr(loader, 'drilling_mode', False)
                     if is_drilling_mode:
-                        print("DRILL SUCCESS: Target found!")
+                        if commitment_mode == "rescue_assist":
+                            print("RESCUE SUCCESS: Target rescued with assist.")
+                        else:
+                            print("DRILL SUCCESS: Target found!")
                     else:
                         print("MISSION SUCCESS: Reward collected.")
                 termination_flag = True
                 break
 
             if step_reward < -150:
-                # Drill failure (drilling mode only)
+                # Commitment failure (stochastic commitment modes only)
                 if verbose:
-                    print("DRILL FAILURE: Wrong location!")
+                    if commitment_mode == "rescue_assist":
+                        print("RESCUE FAILURE: Wrong location!")
+                    else:
+                        print("DRILL FAILURE: Wrong location!")
                 termination_flag = True
                 break
 
@@ -1672,16 +1737,29 @@ def compute_statistics(results):
     return mean, std_dev, std_error
 
 
-def run_fullsim(config, num_trials=1, verbose=False):
+def run_fullsim(config, num_trials=1, verbose=False, seed_mode=None,
+                global_seeds=None, seed_base=4242):
     """
     Run a full simulation campaign: iterates through every possible target node.
-    If num_trials > 1, runs multiple trials for each target and averages the results
-    to smooth out sensor noise variance (crucial for --noisy mode).
+
+    Deterministic labyrinths should generally use ``seed_mode="fixed_global"``,
+    which holds one planner randomness realization fixed across the entire target
+    slate before averaging over targets. This avoids mixing different extracted
+    policy realizations across targets. Noisy labyrinths still default to the
+    older ``per_target_trials`` behavior to smooth observation variance.
 
     Args:
         config: LabyrinthConfig object
-        num_trials: Number of times to run each specific target (default 1)
+        num_trials: Number of trials per target in ``per_target_trials`` mode,
+            or number of global planner seeds in ``fixed_global`` mode when
+            ``global_seeds`` is not provided.
         verbose: Whether to print detailed output per simulation
+        seed_mode: ``"fixed_global"`` or ``"per_target_trials"``. Defaults to
+            ``"fixed_global"`` for deterministic labyrinths and
+            ``"per_target_trials"`` for noisy ones.
+        global_seeds: Optional iterable of fixed planner seeds for
+            ``fixed_global`` mode.
+        seed_base: Base seed used to derive deterministic trial/global seeds.
 
     Returns:
         dict with keys: 'mean_reward', 'std_error', 'avg_time', 'results', 'times', 'num_targets'
@@ -1704,16 +1782,35 @@ def run_fullsim(config, num_trials=1, verbose=False):
     loader = create_loader_from_cache(cache_data, cached_config)
     num_targets = loader.num_targets
 
+    if seed_mode is None:
+        seed_mode = "per_target_trials" if config.noisy else "fixed_global"
+    if seed_mode not in {"fixed_global", "per_target_trials"}:
+        raise ValueError(f"Unknown seed_mode: {seed_mode!r}")
+
+    if global_seeds is not None:
+        global_seeds = [int(x) for x in global_seeds]
+    elif seed_mode == "fixed_global":
+        global_seeds = [int(seed_base + 1000 * i) for i in range(max(1, num_trials))]
+    else:
+        global_seeds = []
+
+    effective_trials = len(global_seeds) if seed_mode == "fixed_global" else int(num_trials)
+
     print(f"\n{'='*60}")
     print(f"FULL SIMULATION: Labyrinth {config.bid}")
-    print(f"Running {num_targets} targets, {num_trials} trials per target")
+    if seed_mode == "fixed_global":
+        print(f"Running {num_targets} targets, {effective_trials} fixed global seed(s)")
+        print(f"Seed mode: fixed_global | Seeds: {global_seeds}")
+    else:
+        print(f"Running {num_targets} targets, {effective_trials} trial(s) per target")
+        print(f"Seed mode: per_target_trials | seed_base={seed_base}")
     print(f"Horizon: {config.horizon}, Targets: {loader.targets}")
     print(f"{'='*60}\n")
 
     # Suppress inner verbose output if running multiple trials to prevent log flooding
     inner_verbose = verbose
-    if num_trials > 1 and verbose:
-        print("Notice: Suppressing step-by-step output for inner trials (num_trials > 1).")
+    if effective_trials > 1 and verbose:
+        print("Notice: Suppressing step-by-step output for inner trials (effective_trials > 1).")
         inner_verbose = False
 
     # Store the averaged result for each target
@@ -1723,56 +1820,89 @@ def run_fullsim(config, num_trials=1, verbose=False):
     # Store every single raw result for deeper analysis if needed
     all_raw_results = []
 
+    per_target_rewards = {int(node): [] for node in loader.targets}
+    per_target_times = {int(node): [] for node in loader.targets}
+    seed_run_means = []
+
     # Stratified outcome tracking per target node
     # Keys: target_node, Values: {'found': count, 'no_dig': count, 'wrong_target': count, 'rewards': []}
     stratified_outcomes = {}
 
     for t_idx in range(num_targets):
-        target_node = loader.targets[t_idx]
-        print(f"--- Target {t_idx+1}/{num_targets} (Node {target_node}) | Running {num_trials} trial(s) ---")
-
-        current_target_rewards = []
-        current_target_times = []
-
-        # Initialize stratified tracking for this target
+        target_node = int(loader.targets[t_idx])
         stratified_outcomes[target_node] = {
             'found': 0,
+            'partial': 0,
             'no_dig': 0,
             'wrong_target': 0,
             'rewards': []
         }
 
-        for trial in range(num_trials):
-            # Create fresh config for each simulation to ensure clean state
-            sim_config = LabyrinthConfig(
-                config.bid, config.horizon, config.maxit,
-                config.ie_min2, config.alpha, config.replan_at_all_syncs,
-                config.decentralized, config.centralized,
-                config.noisy, config.detection_prob
-            )
+    if seed_mode == "fixed_global":
+        for global_seed in global_seeds:
+            current_seed_rewards = []
+            print(f"--- Global Seed {global_seed} | Running full target slate ---")
+            for t_idx in range(num_targets):
+                target_node = int(loader.targets[t_idx])
+                sim_config = LabyrinthConfig(
+                    config.bid, config.horizon, config.maxit,
+                    config.ie_min2, config.alpha, config.replan_at_all_syncs,
+                    config.decentralized, config.centralized,
+                    config.noisy, config.detection_prob,
+                    seed=int(global_seed),
+                    rescue_assist=getattr(config, 'rescue_assist', False),
+                )
+                reward, plan_time = run_labyrinth(
+                    sim_config, verbose=inner_verbose, fixed_target_idx=t_idx)
+                per_target_rewards[target_node].append(reward)
+                per_target_times[target_node].append(plan_time)
+                all_raw_results.append(reward)
+                current_seed_rewards.append(reward)
+                stratified_outcomes[target_node]['rewards'].append(reward)
+                if reward > 50:
+                    stratified_outcomes[target_node]['found'] += 1
+                elif getattr(config, 'commitment_mode', '') == 'rescue_assist' and reward > 0:
+                    stratified_outcomes[target_node]['partial'] += 1
+                elif reward < -150:
+                    stratified_outcomes[target_node]['wrong_target'] += 1
+                else:
+                    stratified_outcomes[target_node]['no_dig'] += 1
+            seed_run_means.append(sum(current_seed_rewards) / len(current_seed_rewards))
+    else:
+        for t_idx in range(num_targets):
+            target_node = int(loader.targets[t_idx])
+            print(f"--- Target {t_idx+1}/{num_targets} (Node {target_node}) | Running {num_trials} trial(s) ---")
+            for trial in range(num_trials):
+                trial_seed = int(seed_base + t_idx * 1000 + trial * 10_000_000)
+                sim_config = LabyrinthConfig(
+                    config.bid, config.horizon, config.maxit,
+                    config.ie_min2, config.alpha, config.replan_at_all_syncs,
+                    config.decentralized, config.centralized,
+                    config.noisy, config.detection_prob,
+                    seed=trial_seed,
+                    rescue_assist=getattr(config, 'rescue_assist', False),
+                )
+                reward, plan_time = run_labyrinth(
+                    sim_config, verbose=inner_verbose, fixed_target_idx=t_idx)
+                per_target_rewards[target_node].append(reward)
+                per_target_times[target_node].append(plan_time)
+                all_raw_results.append(reward)
+                stratified_outcomes[target_node]['rewards'].append(reward)
+                if reward > 50:
+                    stratified_outcomes[target_node]['found'] += 1
+                elif getattr(config, 'commitment_mode', '') == 'rescue_assist' and reward > 0:
+                    stratified_outcomes[target_node]['partial'] += 1
+                elif reward < -150:
+                    stratified_outcomes[target_node]['wrong_target'] += 1
+                else:
+                    stratified_outcomes[target_node]['no_dig'] += 1
 
-            # Run simulation
-            reward, plan_time = run_labyrinth(sim_config, verbose=inner_verbose, fixed_target_idx=t_idx)
-
-            current_target_rewards.append(reward)
-            current_target_times.append(plan_time)
-            all_raw_results.append(reward)
-
-            # Classify outcome based on reward
-            # +100 (reward > 50): correct drill (target found)
-            # -200 (reward < -150): wrong drill (wrong target)
-            # Otherwise: no drill attempted (horizon exhausted with move/wait actions)
-            stratified_outcomes[target_node]['rewards'].append(reward)
-            if reward > 50:
-                stratified_outcomes[target_node]['found'] += 1
-            elif reward < -150:
-                stratified_outcomes[target_node]['wrong_target'] += 1
-            else:
-                stratified_outcomes[target_node]['no_dig'] += 1
-
-        # Compute averages for this specific target
-        avg_reward = sum(current_target_rewards) / num_trials
-        avg_time = sum(current_target_times) / num_trials
+    for t_idx in range(num_targets):
+        target_node = int(loader.targets[t_idx])
+        current_target_rewards = per_target_rewards[target_node]
+        current_target_times = per_target_times[target_node]
+        avg_reward = sum(current_target_rewards) / len(current_target_rewards)
+        avg_time = sum(current_target_times) / len(current_target_times)
 
         target_averages.append(avg_reward)
         target_avg_times.append(avg_time)
@@ -1781,9 +1911,9 @@ def run_fullsim(config, num_trials=1, verbose=False):
         stratified_outcomes[target_node]['avg_reward'] = avg_reward
 
         # Print summary for this target
-        if num_trials > 1:
+        if len(current_target_rewards) > 1:
             # Calculate local variance for this target
-            variance = sum((x - avg_reward) ** 2 for x in current_target_rewards) / (num_trials - 1)
+            variance = sum((x - avg_reward) ** 2 for x in current_target_rewards) / (len(current_target_rewards) - 1)
             std_dev = math.sqrt(variance)
             print(f"Target {target_node}: Avg Reward={avg_reward:.2f} (StdDev={std_dev:.2f}), Avg Time={avg_time:.2f}s")
             # Print raw values if they differ significantly (e.g., a mix of success and failure)
@@ -1799,12 +1929,13 @@ def run_fullsim(config, num_trials=1, verbose=False):
 
     # Compute aggregate outcome counts
     total_found = sum(s['found'] for s in stratified_outcomes.values())
+    total_partial = sum(s['partial'] for s in stratified_outcomes.values())
     total_no_dig = sum(s['no_dig'] for s in stratified_outcomes.values())
     total_wrong = sum(s['wrong_target'] for s in stratified_outcomes.values())
-    total_trials = num_targets * num_trials
+    total_trials = sum(len(v) for v in per_target_rewards.values())
 
     print(f"\n{'='*60}")
-    print(f"FULL SIMULATION RESULTS ({num_targets} targets, {num_trials} trials/target)")
+    print(f"FULL SIMULATION RESULTS ({num_targets} targets, {effective_trials} {'global seed(s)' if seed_mode == 'fixed_global' else 'trials/target'})")
     print(f"{'='*60}")
     print(f"Mean Reward (of averages): {mean_reward:.4f}")
     print(f"Std Dev (between targets): {std_dev:.4f}")
@@ -1817,15 +1948,16 @@ def run_fullsim(config, num_trials=1, verbose=False):
     print(f"\n{'='*60}")
     print(f"STRATIFIED OUTCOMES BY TARGET NODE")
     print(f"{'='*60}")
-    print(f"{'Node':<8} {'Found':<8} {'No Dig':<10} {'Wrong':<8} {'Avg Reward':<12}")
+    print(f"{'Node':<8} {'Found':<8} {'Partial':<9} {'No Dig':<10} {'Wrong':<8} {'Avg Reward':<12}")
     print(f"{'-'*60}")
     for target_node in sorted(stratified_outcomes.keys()):
         outcome = stratified_outcomes[target_node]
-        print(f"{target_node:<8} {outcome['found']:<8} {outcome['no_dig']:<10} {outcome['wrong_target']:<8} {outcome['avg_reward']:<12.2f}")
+        print(f"{target_node:<8} {outcome['found']:<8} {outcome['partial']:<9} {outcome['no_dig']:<10} {outcome['wrong_target']:<8} {outcome['avg_reward']:<12.2f}")
     print(f"{'-'*60}")
-    print(f"{'TOTAL':<8} {total_found:<8} {total_no_dig:<10} {total_wrong:<8}")
+    print(f"{'TOTAL':<8} {total_found:<8} {total_partial:<9} {total_no_dig:<10} {total_wrong:<8}")
     print(f"\nOutcome Rates (across {total_trials} total trials):")
     print(f"  Found:        {total_found:4d} ({100*total_found/total_trials:.1f}%)")
+    print(f"  Partial:      {total_partial:4d} ({100*total_partial/total_trials:.1f}%)")
     print(f"  No Dig:       {total_no_dig:4d} ({100*total_no_dig/total_trials:.1f}%)")
     print(f"  Wrong Target: {total_wrong:4d} ({100*total_wrong/total_trials:.1f}%)")
     print(f"{'='*60}\n")
@@ -1840,9 +1972,14 @@ def run_fullsim(config, num_trials=1, verbose=False):
         'plan_times': target_avg_times,
         'num_targets': num_targets,
         'targets': loader.targets,
+        'seed_mode': seed_mode,
+        'seed_base': seed_base,
+        'global_seeds': global_seeds,
+        'seed_run_means': seed_run_means,
         'stratified_outcomes': stratified_outcomes,
         'outcome_totals': {
             'found': total_found,
+            'partial': total_partial,
             'no_dig': total_no_dig,
             'wrong_target': total_wrong,
             'total_trials': total_trials
@@ -1865,7 +2002,8 @@ def run_multiple_simulations(config, num_simulations, verbose=False):
         sim_config = LabyrinthConfig(config.bid, config.horizon, config.maxit,
                                      config.ie_min2, config.alpha, config.replan_at_all_syncs,
                                      config.decentralized, config.centralized,
-                                     config.noisy, config.detection_prob)
+                                     config.noisy, config.detection_prob,
+                                     rescue_assist=getattr(config, 'rescue_assist', False))
         if config.decentralized:
             total_reward = run_labyrinth_decentralized(sim_config, verbose=verbose)
             plan_time = 0.0  # Decentralized mode doesn't track plan time
@@ -1882,10 +2020,9 @@ def run_multiple_simulations(config, num_simulations, verbose=False):
     print(f"Avg Plan Time: {avg_plan_time:.4f}s\n{'='*60}\n")
     return results, mean, std_dev, std_error
 
-
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("Usage: python sdec_labyrinth_approx.py <benchmark_id> <horizon> [num_sims] [maxit] [IEmin2] [alpha] [--verbose] [--replan_syncs] [--decentralized] [--centralized] [--fullsim] [--target X] [--noisy] [--policy]")
+        print("Usage: python benchmarks/sdec_labyrinth.py <benchmark_id> <horizon> [num_sims] [maxit] [IEmin2] [alpha] [--verbose] [--replan_syncs] [--decentralized] [--centralized] [--fullsim] [--target X] [--noisy] [--rescue_assist] [--policy]")
         print("\nModes:")
         print("  (default)        Semi-decentralized: uses LOS-based sync triggers from trigger_config.json")
         print("  --decentralized  Fully decentralized: no sync triggers, agents cannot share knowledge")
@@ -1893,10 +2030,20 @@ if __name__ == "__main__":
         print("\nDrilling mode (--noisy flag):")
         print("  --noisy          Enable drilling labyrinth with noisy sensors and terminal DRILL action")
         print("                   - DRILL at target: +100 (WIN), DRILL at non-target: -200 (LOSS)")
+        print("  --rescue_assist  Enable stochastic Rescue/Assist variant")
+        print("                   - RESCUE at target with valid ASSIST: +100")
+        print("                   - RESCUE at target without assist: +80")
+        print("                   - any RESCUE at a wrong node: -200")
         print("\nSimulation options:")
         print("  --fullsim        Run one simulation for each possible target node, return averaged results")
-        print("                   (If num_sims > 1, runs multiple trials per target and averages them)")
+        print("                   Deterministic labyrinths default to fixed-global-seed")
+        print("                   target-slate averaging. Noisy labyrinths default to")
+        print("                   per-target trial averaging.")
         print("  --target X       Run a single simulation with a fixed target node ID (e.g., --target 9)")
+        print("  --detection_prob P Sensor accuracy for stochastic modes")
+        print("  --seed_mode M    Seed mode for --fullsim: fixed_global or per_target_trials")
+        print("  --global_seeds S Comma-separated global planner seeds for fixed_global mode")
+        print("  --seed_base N    Base seed used to derive deterministic trial/global seeds")
         print("\nDebug/Analysis options:")
         print("  --policy         Generate human-readable policy visualization file")
         sys.exit(1)
@@ -1931,8 +2078,32 @@ if __name__ == "__main__":
     decentralized = '--decentralized' in sys.argv
     centralized = '--centralized' in sys.argv
     fullsim = '--fullsim' in sys.argv
-    noisy = '--noisy' in sys.argv
+    rescue_assist = '--rescue_assist' in sys.argv or '--rescue-assist' in sys.argv
+    noisy = '--noisy' in sys.argv or rescue_assist
     visualize_policy = '--policy' in sys.argv
+
+    def _get_flag_value(flag, default=None):
+        if flag not in sys.argv:
+            return default
+        idx = sys.argv.index(flag)
+        if idx + 1 >= len(sys.argv):
+            print(f"Error: {flag} requires a value")
+            sys.exit(1)
+        return sys.argv[idx + 1]
+
+    seed_mode = _get_flag_value('--seed_mode', None)
+    global_seeds_raw = _get_flag_value('--global_seeds', None)
+    seed_base = int(_get_flag_value('--seed_base', 4242))
+    detection_prob_raw = _get_flag_value('--detection_prob', _get_flag_value('--detection-prob', None))
+    detection_prob = float(detection_prob_raw) if detection_prob_raw is not None else None
+    global_seeds = None
+    if global_seeds_raw:
+        global_seeds = []
+        for chunk in str(global_seeds_raw).split(','):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            global_seeds.append(int(chunk))
 
     # Parse --target X flag
     target_node_id = None
@@ -1961,12 +2132,20 @@ if __name__ == "__main__":
                            replan_at_all_syncs=replan_syncs,
                            decentralized=decentralized,
                            centralized=centralized,
-                           noisy=noisy)
+                           noisy=noisy,
+                           detection_prob=detection_prob,
+                           rescue_assist=rescue_assist)
 
     if fullsim:
         # Run full simulation over all targets
-        # Pass num_sims as num_trials to smooth out sensor noise
-        run_fullsim(conf, num_trials=num_sims, verbose=verbose)
+        run_fullsim(
+            conf,
+            num_trials=num_sims,
+            verbose=verbose,
+            seed_mode=seed_mode,
+            global_seeds=global_seeds,
+            seed_base=seed_base,
+        )
     elif target_node_id is not None:
         # Run single simulation with fixed target node
         cache_data = load_cached_labyrinth(conf.bid)
@@ -1993,7 +2172,14 @@ if __name__ == "__main__":
             print(f"Running {num_sims} trials for fixed target {target_node_id}...")
             rewards = []
             for i in range(num_sims):
-                r, _ = run_labyrinth(conf, verbose=(verbose and i==0), fixed_target_idx=target_idx, visualize_policy=(visualize_policy and i==0))
+                trial_seed = int(seed_base + i * 1000)
+                trial_conf = LabyrinthConfig(
+                    conf.bid, conf.horizon, conf.maxit, conf.ie_min2, conf.alpha,
+                    conf.replan_at_all_syncs, conf.decentralized, conf.centralized,
+                    conf.noisy, conf.detection_prob, seed=trial_seed,
+                    rescue_assist=getattr(conf, 'rescue_assist', False),
+                )
+                r, _ = run_labyrinth(trial_conf, verbose=(verbose and i==0), fixed_target_idx=target_idx, visualize_policy=(visualize_policy and i==0))
                 rewards.append(r)
             mean, std, err = compute_statistics(rewards)
             print(f"\nFixed Target {target_node_id} Results ({num_sims} trials):")

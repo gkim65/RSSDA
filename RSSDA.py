@@ -145,8 +145,14 @@ def fast_dynamics(belief, T, O, nactions, nstates, nobs):
 def int_tuple(plist: Union[List[float], np.ndarray, None]) -> Tuple[int, ...]:
     if plist is None:
         return tuple()
-    # Create a sparse tuple representation (index, value) ignoring zeros
-    return tuple([x * HASH_FACTOR + int(plist[x] * HASH_FACTOR) for x in range(len(plist)) if plist[x] > 0])
+    # Create a sparse tuple representation (index, value) ignoring zeros.
+    # SDecPOMDP.get_init uses this same helper so the initial belief and
+    # successor beliefs share one dictionary key format.
+    return tuple(
+        x * HASH_FACTOR + int(float(plist[x]) * HASH_FACTOR)
+        for x in range(len(plist))
+        if plist[x] > 0
+    )
 
 def cumprod(lens):     # cumprod takes an array [l_0, l_1, , l_{n-1}] and returns the array of cumulative products
     ll = len(lens)     # [1, l_0, l_0l_1, , l_0l_1l_{n-2}], as well as the full product l_0l_1l_{n-1} separately.
@@ -315,11 +321,17 @@ class SDecPOMDPModel:
         
         # Sync trigger logic (Model property)
         self.sync_states = sync_states if sync_states is not None else []
+        # NOTE: `self.sink_state` is retained as a deprecated attribute for
+        # backward compatibility with benchmarks that reference it, but it is
+        # no longer consulted internally by RSSDA.  The algorithm now flags
+        # ONLY user-supplied sync_states in the state_mask; any benchmark that
+        # wants a specific state (e.g. an absorbing terminal state, or a
+        # co-location "goal" state) to act as a synchronization point must
+        # include that state explicitly in its sync_states list.
         self.sink_state = nstates - 1
         state_mask = np.zeros(nstates, dtype=bool)
         if self.sync_states:
             state_mask[self.sync_states] = True
-        state_mask[self.sink_state] = True
 
         # 2. Create Unified Profile
         self.trigger_profile = TriggerProfile(
@@ -391,6 +403,11 @@ class SDecPOMDP:
         self.sync_states = model.sync_states
         self.sink_state = model.sink_state
         self.trigger_profile = model.trigger_profile
+        self.has_sync_triggers = bool(
+            self.sync_states
+            or self.trigger_profile.sync_actions
+            or self.trigger_profile.sync_observations
+        )
 
         # Performance shortcuts
         self.T = model.T
@@ -643,6 +660,47 @@ class SDecPOMDP:
             self.terminal_dict[(dist, a)] = sparse_transitions
             
         return self.terminal_dict[(dist, act)]
+
+    def _get_terminal_single_action(self, dist: BeliefID, act: JointActionID) -> List[Tuple[ObsID, Prob, BeliefID]]:
+        """
+        Compute successors for one requested action.
+
+        The all-action batched path is useful when SDec branches repeatedly
+        through centralized and decentralized action choices. In a no-trigger
+        Dec-POMDP run, however, RS-SDA* should behave like RS-MAA*: only the
+        requested action's posterior beliefs should be materialized.
+        """
+        b = self.dists[dist]
+
+        if self.use_sparse:
+            next_states = b @ self.T_repr[act]
+            active_states = np.flatnonzero(next_states > EPSILON)
+            p_obs = np.zeros(self.nobs, dtype=np.float64)
+            joint_unnorm = np.zeros((self.nobs, self.nstates), dtype=np.float64)
+            O_a = self.O_repr[act]
+
+            for s_prime in active_states:
+                val_ns = next_states[s_prime]
+                start = O_a.indptr[s_prime]
+                end = O_a.indptr[s_prime + 1]
+                for idx in range(start, end):
+                    o = O_a.indices[idx]
+                    prob = val_ns * O_a.data[idx]
+                    joint_unnorm[o, s_prime] = prob
+                    p_obs[o] += prob
+        else:
+            next_states = b @ self.T_repr[act]
+            joint_unnorm = self.O_repr[act] * next_states[:, None]
+            p_obs = joint_unnorm.sum(axis=0)
+            joint_unnorm = joint_unnorm.T
+
+        sparse_transitions = []
+        for o in np.flatnonzero(p_obs > EPSILON):
+            _, did = self.get_init(joint_unnorm[o])
+            sparse_transitions.append((int(o), float(p_obs[o]), did))
+
+        self.terminal_dict[(dist, act)] = sparse_transitions
+        return sparse_transitions
 
     # r_depth: The number of steps we are allowed to perform full POMDP branching
     def cen_dp_Q_hybrid(self, rh: int, dist_id: BeliefID, ja: JointActionID, r_depth: int) -> float:
@@ -1643,11 +1701,8 @@ class SDecPOMDP:
             return 0.0, -1
         a = a / dsum
 
-        # SPARSE HASHING: Only hash non-zero entries
-        nonzero_idx = np.nonzero(a > EPSILON)[0]
-        
-        # Create tuple of (state_idx, rounded_prob) pairs for non-zero entries
-        dist_key = tuple((int(idx), int(a[idx] * HASH_FACTOR)) for idx in nonzero_idx)
+        # Use the same sparse hash helper as the initial belief.
+        dist_key = int_tuple(a)
 
         d = self.dist_dict.get(dist_key)
         if d is None:
@@ -1777,7 +1832,11 @@ class SDecPOMDP:
         
     def get_terminal(self, dist: BeliefID, act: JointActionID) -> List[Tuple[ObsID, Prob, BeliefID]]:
         terminal = self.terminal_dict.get((dist, act))
-        return terminal if terminal is not None else self._get_terminal_batched(dist, act)
+        if terminal is not None:
+            return terminal
+        if not self.has_sync_triggers:
+            return self._get_terminal_single_action(dist, act)
+        return self._get_terminal_batched(dist, act)
  
     def _terminal_probabilities_fully_dec(self, pi_c: Policy) -> Tuple[List[BeliefID], List[BeliefID], List[Prob], List[Prob], float, int, int]:
         """

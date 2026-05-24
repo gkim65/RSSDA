@@ -25,7 +25,9 @@ import numpy as np
 import time
 from scipy import sparse
 
-CACHE_DIR = os.path.join(os.path.dirname(__file__), "labyrinth_cache")
+SCRIPT_DIR = os.path.dirname(__file__)
+BENCH_DIR = os.path.join(SCRIPT_DIR, "labyrinth_benchmarks")
+CACHE_DIR = os.path.join(SCRIPT_DIR, "labyrinth_cache")
 
 
 def get_cache_path(bid, suffix):
@@ -1192,7 +1194,7 @@ def precompute_all(bid, max_horizon, decentralized=False, centralized=False):
     elif not decentralized:
         # Check if semi-decentralized data file was used
         import os
-        semi_dec_file = f"labyrinth_benchmarks/labyrinth_{bid}_semi_decentralized.data"
+        semi_dec_file = os.path.join(BENCH_DIR, f"labyrinth_{bid}_semi_decentralized.data")
         if os.path.exists(semi_dec_file):
             cache_bid = f"{bid}_semi_decentralized"
         else:
@@ -1212,12 +1214,12 @@ def precompute_all(bid, max_horizon, decentralized=False, centralized=False):
 def precompute_noisy_labyrinth(bid, detection_prob=0.85):
     """
     Precompute and cache drilling labyrinth data.
-    Expects the noisy .data file to exist at labyrinth_benchmarks/noisy/labyrinth_{bid}_noisy_{prob}.data
+    Expects the noisy .data file to exist under benchmarks/labyrinth_benchmarks/noisy/.
 
     Drilling mode uses simplified state encoding: s = u1*(N*T) + u2*T + t_idx (NO found flags)
     """
     prob_int = int(detection_prob * 100)
-    filename = f"labyrinth_benchmarks/noisy/labyrinth_{bid}_noisy_{prob_int}.data"
+    filename = os.path.join(BENCH_DIR, "noisy", f"labyrinth_{bid}_noisy_{prob_int}.data")
 
     if not os.path.exists(filename):
         print(f"Error: Noisy labyrinth file not found: {filename}")
@@ -1555,6 +1557,363 @@ def load_cached_noisy_labyrinth(bid, detection_prob=0.85, fast_mode=True):
     return data
 
 
+def _precompute_sparse_three_tuple_labyrinth_file(filename, bid, detection_prob,
+                                                  cache_key, label,
+                                                  commitment_mode,
+                                                  reward_config=None):
+    """
+    Precompute a stochastic 3-tuple Labyrinth file.
+
+    These files use state encoding ``s = u1*(N*T) + u2*T + t_idx`` plus a
+    terminal sink state.  This helper is sparse-first so the larger
+    rescue/assist variants do not allocate dense transition tensors.
+    """
+    if not os.path.exists(filename):
+        print(f"Error: {label} labyrinth file not found: {filename}")
+        return None
+
+    print(f"Precomputing {label} labyrinth {bid} (detection_prob={detection_prob})...")
+    t0 = time.time()
+
+    nstates = None
+    act_per_agent = None
+    obs_per_agent = None
+    with open(filename, 'r') as f:
+        for line in f:
+            d = line.split()
+            if not d:
+                continue
+            if d[0] == "states:":
+                nstates = int(d[1])
+            elif d[0] == "actions:":
+                act_per_agent = int(d[1])
+            elif d[0] == "observations:":
+                obs_per_agent = int(d[1])
+
+    if nstates is None or act_per_agent is None or obs_per_agent is None:
+        print(f"Error: Could not parse dimensions from {filename}")
+        return None
+
+    nacts = act_per_agent ** 2
+    nobs = obs_per_agent ** 2
+    nsq = nstates * nstates
+    nso = nstates * nobs
+    sink_state = nstates - 1
+    num_nodes = obs_per_agent // 2
+    num_targets = num_nodes - 1
+    start_node = 0
+
+    print(f"  {label} dimensions: {nstates} states, {nacts} actions, {nobs} obs")
+    print(f"  Nodes: {num_nodes}, Targets: {num_targets}")
+
+    T_entries = {}
+    O_entries = {}
+    R_np = np.full((nacts, nstates), -1.0, dtype=np.float64)
+    edges = set()
+
+    with open(filename, 'r') as f:
+        for line in f:
+            d = line.split()
+            if not d:
+                continue
+            row_type = d[0]
+
+            if row_type == "T":
+                a1, a2 = int(d[1]), int(d[2])
+                s_from, s_to = int(d[3]), int(d[4])
+                prob = float(d[5])
+                ja = a1 + act_per_agent * a2
+                idx = ja * nsq + s_from * nstates + s_to
+                T_entries[idx] = T_entries.get(idx, 0.0) + prob
+
+                if prob > 0 and s_from != sink_state and s_to != sink_state:
+                    temp_from = s_from // num_targets
+                    u2_from = temp_from % num_nodes
+                    u1_from = temp_from // num_nodes
+                    temp_to = s_to // num_targets
+                    u2_to = temp_to % num_nodes
+                    u1_to = temp_to // num_nodes
+                    if u1_from != u1_to:
+                        edges.add((u1_from, u1_to))
+                    if u2_from != u2_to:
+                        edges.add((u2_from, u2_to))
+
+            elif row_type == "O":
+                a1, a2 = int(d[1]), int(d[2])
+                s_end = int(d[3])
+                o1, o2 = int(d[4]), int(d[5])
+                prob = float(d[6])
+                ja = a1 + act_per_agent * a2
+                o = o1 + obs_per_agent * o2
+                idx = ja * nso + s_end * nobs + o
+                O_entries[idx] = O_entries.get(idx, 0.0) + prob
+
+            elif row_type == "R":
+                a1, a2 = int(d[1]), int(d[2])
+                s = int(d[3])
+                reward = float(d[-1])
+                ja = a1 + act_per_agent * a2
+                R_np[ja, s] = reward
+
+    T_indices = sorted((i, v) for i, v in T_entries.items() if v > 0)
+    O_indices = sorted((i, v) for i, v in O_entries.items() if v > 0)
+
+    print(f"  Edges: {len(edges)}")
+    print(f"  T sparsity: {len(T_indices)}/{nacts * nsq} ({100*len(T_indices)/(nacts * nsq):.3f}%)")
+    print(f"  O sparsity: {len(O_indices)}/{nacts * nso} ({100*len(O_indices)/(nacts * nso):.3f}%)")
+
+    T_transpose_coo = []
+    for idx, val in T_indices:
+        act = idx // nsq
+        rem = idx % nsq
+        s = rem // nstates
+        sp = rem % nstates
+        T_transpose_coo.append((act * nsq + sp * nstates + s, val))
+
+    O_transpose_coo = []
+    for idx, val in O_indices:
+        act = idx // nso
+        rem = idx % nso
+        s = rem // nobs
+        o = rem % nobs
+        O_transpose_coo.append((act * nobs * nstates + o * nstates + s, val))
+
+    print("  Pre-computing SPARSE CSR matrices...")
+    t1 = time.time()
+    T_by_action = [[] for _ in range(nacts)]
+    for idx, val in T_indices:
+        act = idx // nsq
+        rem = idx % nsq
+        T_by_action[act].append((rem // nstates, rem % nstates, val))
+
+    O_by_action = [[] for _ in range(nacts)]
+    for idx, val in O_indices:
+        act = idx // nso
+        rem = idx % nso
+        O_by_action[act].append((rem // nobs, rem % nobs, val))
+
+    T_csr_list = []
+    for rows_for_action in T_by_action:
+        if rows_for_action:
+            rows, cols, data = zip(*rows_for_action)
+        else:
+            rows, cols, data = [], [], []
+        T_csr_list.append(
+            sparse.csr_matrix((data, (rows, cols)), shape=(nstates, nstates), dtype=np.float64)
+        )
+
+    O_csr_list = []
+    for rows_for_action in O_by_action:
+        if rows_for_action:
+            rows, cols, data = zip(*rows_for_action)
+        else:
+            rows, cols, data = [], [], []
+        O_csr_list.append(
+            sparse.csr_matrix((data, (rows, cols)), shape=(nstates, nobs), dtype=np.float64)
+        )
+
+    print(f"    Sparse matrices created in {time.time()-t1:.2f}s")
+
+    init_beliefs = [0.0] * nstates
+    prob_per_target = 1.0 / num_targets
+    for t_idx in range(num_targets):
+        s = start_node * (num_nodes * num_targets) + start_node * num_targets + t_idx
+        init_beliefs[s] = prob_per_target
+
+    valid_actions_per_state = {}
+    for s in range(nstates):
+        valid_actions_per_state[s] = [0] if s == sink_state else list(range(nacts))
+
+    rescue_action = act_per_agent - 2 if commitment_mode == "rescue_assist" else act_per_agent - 1
+    assist_action = act_per_agent - 1 if commitment_mode == "rescue_assist" else None
+    reward_config = dict(reward_config or {})
+    cache_data = {
+        'config': {
+            'bid': bid,
+            'nagents': 2,
+            'nstates': nstates,
+            'nacts': nacts,
+            'nobs': nobs,
+            'act_per_agent': act_per_agent,
+            'obs_per_agent': obs_per_agent,
+            'nacts_factor': [act_per_agent, act_per_agent],
+            'nobs_factor': [obs_per_agent, obs_per_agent],
+            'nsq': nsq,
+            'nso': nso,
+            'sink_state': sink_state,
+            'state_trigger': [],
+            'detection_prob': detection_prob,
+            'noisy': True,
+            'drilling_mode': True,
+            'commitment_mode': commitment_mode,
+            'rescue_action': rescue_action,
+            'assist_action': assist_action,
+            **reward_config,
+        },
+        'loader': {
+            'num_nodes': num_nodes,
+            'num_targets': num_targets,
+            'targets': [i for i in range(num_nodes) if i != start_node],
+            'start_node': start_node,
+            'edges_list': list(edges),
+        },
+        'T_coo': T_indices,
+        'O_coo': O_indices,
+        'T_transpose_coo': T_transpose_coo,
+        'O_transpose_coo': O_transpose_coo,
+        'T_size': nacts * nsq,
+        'O_size': nacts * nso,
+        'T_transpose_size': nacts * nsq,
+        'O_transpose_size': nacts * nobs * nstates,
+        'T_csr_list': T_csr_list,
+        'O_csr_list': O_csr_list,
+        'R_np': R_np,
+        'R': R_np.ravel().tolist(),
+        'init_beliefs': init_beliefs,
+        'valid_actions_per_state': valid_actions_per_state,
+        'sparse': True,
+    }
+
+    cache_path = get_cache_path(cache_key, "data_v5")
+    with open(cache_path, 'wb') as f:
+        pickle.dump(cache_data, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    elapsed = time.time() - t0
+    size_mb = os.path.getsize(cache_path) / (1024 * 1024)
+    print(f"Cached {label} labyrinth {bid}: {size_mb:.1f} MB in {elapsed:.2f}s")
+    return cache_data
+
+
+def precompute_rescue_assist_labyrinth(
+    bid,
+    detection_prob=0.85,
+    assist_reward=100.0,
+    unassisted_reward=80.0,
+    wrong_reward=-200.0,
+    step_cost=-1.0,
+):
+    """Generate/cache the Rescue/Assist stochastic Labyrinth variant."""
+    from labyrinth_rescue_assist_generator import (
+        generate_rescue_assist_labyrinth,
+        rescue_reward_suffix,
+    )
+
+    prob_int = int(detection_prob * 100)
+    reward_suffix = rescue_reward_suffix(
+        assist_reward, unassisted_reward, wrong_reward, step_cost)
+    filename, _ = generate_rescue_assist_labyrinth(
+        bid,
+        detection_prob,
+        assist_reward=assist_reward,
+        unassisted_reward=unassisted_reward,
+        wrong_reward=wrong_reward,
+        step_cost=step_cost,
+    )
+    return _precompute_sparse_three_tuple_labyrinth_file(
+        filename,
+        bid,
+        detection_prob,
+        f"{bid}_rescue_assist_{prob_int}{reward_suffix}",
+        "rescue_assist",
+        "rescue_assist",
+        reward_config={
+            'rescue_assist_reward': float(assist_reward),
+            'rescue_unassisted_reward': float(unassisted_reward),
+            'rescue_wrong_reward': float(wrong_reward),
+            'rescue_step_cost': float(step_cost),
+            'rescue_reward_suffix': reward_suffix,
+        },
+    )
+
+
+def load_cached_rescue_assist_labyrinth(
+    bid,
+    detection_prob=0.85,
+    fast_mode=True,
+    assist_reward=100.0,
+    unassisted_reward=80.0,
+    wrong_reward=-200.0,
+    step_cost=-1.0,
+):
+    """Load cached Rescue/Assist stochastic Labyrinth data."""
+    from labyrinth_rescue_assist_generator import rescue_reward_suffix
+
+    prob_int = int(detection_prob * 100)
+    reward_suffix = rescue_reward_suffix(
+        assist_reward, unassisted_reward, wrong_reward, step_cost)
+    cache_key = f"{bid}_rescue_assist_{prob_int}{reward_suffix}"
+    cache_path_v5 = get_cache_path(cache_key, "data_v5")
+    cache_path_v4 = get_cache_path(cache_key, "data_v4")
+
+    if os.path.exists(cache_path_v5):
+        cache_path = cache_path_v5
+        is_v5 = True
+    elif os.path.exists(cache_path_v4):
+        cache_path = cache_path_v4
+        is_v5 = False
+    else:
+        print(f"Rescue/assist cache not found: {cache_path_v5}")
+        return None
+
+    t0 = time.time()
+    with open(cache_path, 'rb') as f:
+        data = pickle.load(f)
+
+    t1 = time.time()
+    print(f"  (rescue_assist pickle load in {t1-t0:.2f}s)")
+
+    if is_v5 or data.get('sparse', False):
+        data['T_transpose'] = None
+        data['O_transpose'] = None
+        data['T'] = {idx: val for idx, val in data['T_coo']}
+        data['O'] = {idx: val for idx, val in data['O_coo']}
+        data['T_is_sparse'] = True
+        print(f"  (v5 sparse load in {time.time()-t1:.2f}s, total {time.time()-t0:.2f}s)")
+    elif fast_mode:
+        data['T_transpose'] = None
+        data['O_transpose'] = None
+        data['T'] = data['T_np'].ravel()
+        data['O'] = data['O_np'].ravel()
+        print(f"  (fast mode in {time.time()-t1:.2f}s, total {time.time()-t0:.2f}s)")
+    else:
+        T = [0.0] * data['T_size']
+        for idx, val in data['T_coo']:
+            T[idx] = val
+        data['T'] = T
+        O = [0.0] * data['O_size']
+        for idx, val in data['O_coo']:
+            O[idx] = val
+        data['O'] = O
+        print(f"  (rescue_assist COO->dense in {time.time()-t1:.2f}s, total {time.time()-t0:.2f}s)")
+
+    return data
+
+
+def precompute_rescue_assist_all(
+    bid,
+    detection_prob=0.85,
+    assist_reward=100.0,
+    unassisted_reward=80.0,
+    wrong_reward=-200.0,
+    step_cost=-1.0,
+):
+    """Generate the Rescue/Assist .data file and cache."""
+    cache_data = precompute_rescue_assist_labyrinth(
+        bid,
+        detection_prob,
+        assist_reward=assist_reward,
+        unassisted_reward=unassisted_reward,
+        wrong_reward=wrong_reward,
+        step_cost=step_cost,
+    )
+    print(
+        f"\nRescue/assist precomputation complete for labyrinth {bid}, "
+        f"detection_prob={detection_prob}, assist_reward={assist_reward}, "
+        f"unassisted_reward={unassisted_reward}, wrong_reward={wrong_reward}, "
+        f"step_cost={step_cost}")
+    return cache_data
+
+
 def precompute_noisy_all(bid, detection_prob=0.85):
     """Generate drilling labyrinth files and cache."""
     from labyrinth_noisy_generator import generate_noisy_labyrinth
@@ -1570,10 +1929,20 @@ def precompute_noisy_all(bid, detection_prob=0.85):
 
 
 if __name__ == "__main__":
+    def _flag_float(args, name, default):
+        prefix = name + "="
+        for i, arg in enumerate(args):
+            if arg == name and i + 1 < len(args):
+                return float(args[i + 1])
+            if arg.startswith(prefix):
+                return float(arg[len(prefix):])
+        return default
+
     if len(sys.argv) < 2:
         print("Usage:")
         print("  python labyrinth_cache.py precompute <bid> <horizon>       - Precompute standard caches")
         print("  python labyrinth_cache.py precompute_noisy <bid> [prob]    - Precompute noisy caches")
+        print("  python labyrinth_cache.py precompute_rescue_assist <bid> [prob] [--unassisted-reward R] - Precompute rescue/assist caches (default unassisted=80)")
         print("  python labyrinth_cache.py list                             - List cached labyrinths")
         sys.exit(1)
 
@@ -1594,6 +1963,29 @@ if __name__ == "__main__":
         bid = sys.argv[2]
         detection_prob = float(sys.argv[3]) if len(sys.argv) > 3 else 0.7
         precompute_noisy_all(bid, detection_prob)
+
+    elif cmd == "precompute_rescue_assist":
+        if len(sys.argv) < 3:
+            print(
+                "Usage: python labyrinth_cache.py precompute_rescue_assist "
+                "<bid> [detection_prob] [--assist-reward R] "
+                "[--unassisted-reward R] [--wrong-reward R] [--step-cost R]")
+            sys.exit(1)
+        bid = sys.argv[2]
+        detection_prob = (
+            float(sys.argv[3])
+            if len(sys.argv) > 3 and not sys.argv[3].startswith("--")
+            else 0.85
+        )
+        extra_args = sys.argv[4:] if len(sys.argv) > 3 and not sys.argv[3].startswith("--") else sys.argv[3:]
+        precompute_rescue_assist_all(
+            bid,
+            detection_prob,
+            assist_reward=_flag_float(extra_args, "--assist-reward", 100.0),
+            unassisted_reward=_flag_float(extra_args, "--unassisted-reward", 80.0),
+            wrong_reward=_flag_float(extra_args, "--wrong-reward", -200.0),
+            step_cost=_flag_float(extra_args, "--step-cost", -1.0),
+        )
 
     elif cmd == "list":
         if not os.path.exists(CACHE_DIR):

@@ -74,7 +74,7 @@ except ImportError:
 
 # Import original decPOMDP for fully decentralized mode
 try:
-    from decPOMDP import DecPOMDP as OriginalDecPOMDP, MemoryLimitExceeded as DecPOMDPMemoryLimitExceeded
+    from baselines.decPOMDP import DecPOMDP as OriginalDecPOMDP, MemoryLimitExceeded as DecPOMDPMemoryLimitExceeded
 except ImportError:
     print("Warning: Could not import original decPOMDP. Decentralized mode may not work.")
     OriginalDecPOMDP = None
@@ -295,10 +295,15 @@ def build_problem():
 
 def triggers_none(): return []
 def triggers_semi():
+    # State-based synchronization trigger set for semi-decentralized mode.
+    # These are the (joint) states at which the helicopter and ship can
+    # communicate — physically justified by co-location or near-co-location
+    # at the critical patient / hospital waypoints.
     S = set()
-    S.add(state_id(1, 1, 1, 0, 0))   # patient-ship-late
-    S.add(state_id(3, 2, 3, 3, 1))   # hospital XOR: non-arrived north (helo north, ship at hosp)
-    S.add(state_id(3, 3, 3, 2, 1))   # hospital XOR: non-arrived north (ship north, helo at hosp)
+    S.add(state_id(1, 1, 1, 0, 0))   # patient-ship-late (helo at patient, ship one south)
+    S.add(state_id(3, 2, 3, 3, 1))   # hospital XOR: helo one south, ship at hospital
+    S.add(state_id(3, 3, 3, 2, 1))   # hospital XOR: helo at hospital, ship one south
+    S.add(state_id(3, 3, 3, 3, 1))   # both at hospital with patient (joint dropoff sync)
     return sorted(S)
 def triggers_full(): return list(range(nstates))
 
