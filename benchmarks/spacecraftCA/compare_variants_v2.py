@@ -18,7 +18,8 @@ Usage:
   python compare_variants_v2.py --init-dt 0          # dangerous (collision-course)
   python compare_variants_v2.py --init-dt 0 --compare-v1   # also solve v1 side-by-side
 """
-import os, sys, argparse
+import os, sys, argparse, math, io, contextlib
+from array import array
 import numpy as np
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -28,11 +29,22 @@ sys.path.insert(0, _ROOT); sys.path.insert(0, _BENCHMARKS); sys.path.insert(0, _
 
 from brahe import initialize_eop
 from RSSDA import SDecPOMDP, SDecPOMDPModel, int_tuple
+from baselines.decPOMDP import DecPOMDP as RSMAA
 
 import spacecraft_transition_v2 as TV
 import spacecraft_discretizer_v2 as D
 from sdec_spacecraft import build_config
 from spacecraft_matrices import DV_MAGNITUDE
+
+# --- RS-MAA* defaults (v1-proven, see compare_variants.solve_dec_rsmaa) -------
+# Every one is exposed as a CLI flag in main() but defaults to the value below,
+# so the Dec variant solves with no tuning required. Override only if Dec misbehaves.
+RSMAA_DEFAULTS = dict(
+    cluster_type="lossless", maxit=200, q_depth=3, alpha=0.2,
+    heuristic="MDP", rec_type="MDP", maxrec=2, memory=None,
+    iter_limit=10000, p_threshold_cluster=0.0, p_threshold_expand=0.0,
+    memory_limit_gb=None, memory_check_interval=None, verbose=False,
+)
 
 
 def build_config_fixed():
@@ -51,6 +63,159 @@ def v2_model(T, O, R, init_b, sync_stages):
         sync_states=D.sync_trigger_states(sync_stages),
         sync_actions=[], sync_observations=[],
     )
+
+
+def dense_rows_to_pdict(mat3, tol=0.0):
+    """Convert (action, row, col) dense arrays to RS-MAA* sparse row tuples.
+    Faithful copy of compare_variants.dense_rows_to_pdict."""
+    rows = []
+    for act in range(mat3.shape[0]):
+        for row in range(mat3.shape[1]):
+            vals = mat3[act, row, :]
+            idx = np.flatnonzero(vals > tol)
+            rows.append((
+                array("i", [int(x) for x in idx]),
+                array("d", [float(vals[x]) for x in idx]),
+            ))
+    return rows
+
+
+def solve_dec_rsmaa_v2(T, O, R, init_b, rsmaa_cfg):
+    """Solve the v2 reduced-state model fully-decentralized with baseline RS-MAA*.
+
+    Mirrors compare_variants.solve_dec_rsmaa, but on v2 dims: N_STATES_TOTAL states,
+    N_JOINT_ACTIONS actions, and the v2 RICHER local-obs factor N_OBS_AGENT (NOT v1's
+    N_DEV). Returns (value, policy, clustering) — RS-MAA*'s native policy structure,
+    consumed by expected_rsmaa_return_v2 below.
+    """
+    T_pdict = dense_rows_to_pdict(T)
+    O_pdict = dense_rows_to_pdict(O)
+    solver = RSMAA(
+        nagents=2,
+        nstates=D.N_STATES_TOTAL,
+        nactions=TV.N_JOINT_ACTIONS,
+        nobs=O.shape[2],
+        transitions=T_pdict,
+        obs=O_pdict,
+        rewards=R.reshape(-1).tolist(),
+        init_beliefs=init_b.tolist(),
+        nacts_factor=[TV.N_ACT_AGENT, TV.N_ACT_AGENT],
+        nobs_factor=[TV.N_OBS_AGENT, TV.N_OBS_AGENT],   # v2 richer obs (dt_obs * vdev)
+        maxh=D.N_STAGES,
+        cluster_type=rsmaa_cfg["cluster_type"],
+        maxit=rsmaa_cfg["maxit"],
+        q_depth=rsmaa_cfg["q_depth"],
+        alpha=rsmaa_cfg["alpha"],
+        iter_limit=rsmaa_cfg["iter_limit"],
+        maxrec=rsmaa_cfg["maxrec"],
+        memory=rsmaa_cfg["memory"],
+        heuristic=rsmaa_cfg["heuristic"],
+        rec_type=rsmaa_cfg["rec_type"],
+        p_threshold_cluster=rsmaa_cfg["p_threshold_cluster"],
+        p_threshold_expand=rsmaa_cfg["p_threshold_expand"],
+        policyvalfound=-math.inf,
+        output=rsmaa_cfg["verbose"],
+        memory_limit_gb=rsmaa_cfg["memory_limit_gb"],
+        memory_check_interval=rsmaa_cfg["memory_check_interval"],
+    )
+    solver.decentralized = True
+    solver.onesided = False
+    if rsmaa_cfg["verbose"]:
+        value, policy, clustering = solver.multi_agent_astar(D.N_STAGES)
+    else:
+        with contextlib.redirect_stdout(io.StringIO()):
+            value, policy, clustering = solver.multi_agent_astar(D.N_STAGES)
+    return float(value), policy, clustering
+
+
+def expected_rsmaa_return_v2(T, O, R, full_result, init_b, prune=1e-12):
+    """
+    Exact belief-walk eval of a fixed RS-MAA* Dec policy on the v2 model. Mirrors
+    compare_variants.expected_rsmaa_policy_metrics (policy[stage][agent][cluster] +
+    clustering[step][agent][cluster][local_obs]), but emits v2's reward decomposition
+    (maneuver/deviation/risk/displace) and v2 QUADRATURE collision (miss_km_from_dt),
+    so Dec produces byte-identical CSV/figure rows to Cen/SDec.
+
+    Returns the same 6-tuple shape as expected_return_from_policy:
+      (expected_return, coll_prob, stage_any_burns, comp, term_dt, act_mass)
+    """
+    from collections import defaultdict
+
+    value, policy, clustering = full_result
+    obs_agent_size = TV.N_OBS_AGENT
+
+    expected_return = 0.0
+    coll_prob = 0.0
+    stage_any_burns = np.zeros(D.N_STAGES)
+    comp = defaultdict(float)
+    term_dt = defaultdict(float)
+    act_mass = defaultdict(float)
+
+    # Walk from the init_b support (Dec has no belief index; cluster ptrs start at 0).
+    support = [(int(s), init_b[s]) for s in np.flatnonzero(init_b)]
+    nodes = defaultdict(float)
+    for s, p in support:
+        nodes[(s, 0, 0)] += p
+
+    for step in range(D.N_STAGES):
+        next_nodes = defaultdict(float)
+        for (true_state, c0, c1), mass in nodes.items():
+            if mass <= prune or true_state == D.SINK_STATE:
+                continue
+            dt_bin, v1b, v2b, stage = D.index_to_state(true_state)
+            if step >= len(policy):
+                a1, a2 = 0, 0
+            else:
+                try:
+                    a1 = int(policy[step][0][c0]); a2 = int(policy[step][1][c1])
+                except (IndexError, TypeError):
+                    a1, a2 = 0, 0
+            a1, a2 = max(a1, 0), max(a2, 0)
+            joint_act = a1 + TV.N_ACT_AGENT * a2
+            b1, b2 = a1, a2
+
+            expected_return += mass * float(R[joint_act, true_state])
+            act_mass[(stage, int(joint_act))] += mass
+            comp["maneuver"] += mass * TV.REWARD_MANEUVER * ((b1 != 0) + (b2 != 0))
+            comp["deviation"] += mass * TV.REWARD_DEVIATION * (
+                (v1b != D.VDEV_ZERO) + (v2b != D.VDEV_ZERO))
+            if (b1 != 0 or b2 != 0):
+                stage_any_burns[stage] += mass
+            if stage == D.N_STAGES - 1:
+                dt_c = D.dt_bin_center_km(dt_bin)
+                miss = D.miss_km_from_dt(dt_c, PERP_KM)
+                comp["risk"] += mass * TV.risk_ramp_reward(miss)
+                comp["displace"] += mass * TV.displacement_cost(dt_c)
+                term_dt[dt_bin] += mass
+                if miss < D.COLLISION_THRESHOLD_KM:
+                    coll_prob += mass
+
+            nzT = np.flatnonzero(T[joint_act, true_state, :] > prune)
+            for sp in nzT:
+                bm = mass * float(T[joint_act, true_state, sp])
+                if bm <= prune:
+                    continue
+                if sp == D.SINK_STATE:
+                    next_nodes[(int(sp), c0, c1)] += bm; continue
+                nzO = np.flatnonzero(O[joint_act, sp, :] > prune)
+                for obs in nzO:
+                    om = bm * float(O[joint_act, sp, obs])
+                    if om <= prune:
+                        continue
+                    o1 = int(obs) % obs_agent_size; o2 = int(obs) // obs_agent_size
+                    if step < len(clustering):
+                        try:
+                            nc0 = int(clustering[step][0][c0][o1])
+                            nc1 = int(clustering[step][1][c1][o2])
+                        except (IndexError, TypeError):
+                            nc0, nc1 = 0, 0
+                        nc0 = max(nc0, 0); nc1 = max(nc1, 0)
+                    else:
+                        nc0, nc1 = c0, c1
+                    next_nodes[(int(sp), nc0, nc1)] += om
+        nodes = {n: p for n, p in next_nodes.items()
+                 if p > prune and n[0] != D.SINK_STATE}
+    return expected_return, coll_prob, stage_any_burns, comp, term_dt, act_mass
 
 
 def expected_return_from_policy(T, O, R, sdec, full_result, init_b, obs_agent_size,
@@ -145,17 +310,21 @@ def expected_return_from_policy(T, O, R, sdec, full_result, init_b, obs_agent_si
 PERP_KM = 0.0
 
 
-def solve_and_eval(variant, init_b, rsmaa=False):
+def solve_and_eval(variant, init_b, rsmaa=False, rsmaa_cfg=None):
     rate_at, perp, _ = TV.compute_gain_table_and_perp(PERP_KM, 0.0)
     T, O = TV.build_T_O(rate_at, variant)
     R = TV.build_R(perp)
-    cs = {"centralized": list(range(D.N_STAGES)),
-          "sdec": list(TV.CONTACT_STAGES), "dec": []}[variant]
     obs_agent_size = TV.N_OBS_AGENT
     if rsmaa:
-        # Dec via RS-MAA* — TODO: wire baselines.decPOMDP like compare_variants.solve_dec_rsmaa.
-        # For now, flag as not-yet-ported so we don't silently use the wrong solver.
-        return None, None, None, None, None, None, "RS-MAA* port pending"
+        # Dec via RS-MAA* (NOT RS-SDA* — per Mahdi's notes the Dec variant is solved
+        # by the purpose-built RS-MAA* baseline). Native policy structure, evaluated
+        # by the RS-MAA*-specific belief walk.
+        full = solve_dec_rsmaa_v2(T, O, R, init_b, rsmaa_cfg or RSMAA_DEFAULTS)
+        er, cp, burns, comp, term_dt, act_mass = expected_rsmaa_return_v2(
+            T, O, R, full, init_b)
+        return er, cp, burns, comp, term_dt, act_mass, None
+    cs = {"centralized": list(range(D.N_STAGES)),
+          "sdec": list(TV.CONTACT_STAGES)}[variant]
     model = v2_model(T, O, R, init_b, cs)
     sdec = SDecPOMDP(model=model, config=build_config_fixed())
     full = sdec.multi_agent_astar(D.N_STAGES)
@@ -221,10 +390,35 @@ def main():
     ap.add_argument("--fig-dir", type=str,
                     default=os.path.join(_HERE, "notes", "figures"))
     ap.add_argument("--no-figures", action="store_true")
+    ap.add_argument("--variants", type=str, default="centralized,sdec,dec",
+                    help="comma-separated subset of centralized,sdec,dec")
+    # --- RS-MAA* (Dec) knobs: each defaults to the v1-proven value, so Dec solves
+    #     with no tuning. Override only if the Dec policy misbehaves. ---
+    ap.add_argument("--rsmaa-cluster-type", default=RSMAA_DEFAULTS["cluster_type"])
+    ap.add_argument("--rsmaa-maxit", type=int, default=RSMAA_DEFAULTS["maxit"])
+    ap.add_argument("--rsmaa-q-depth", type=int, default=RSMAA_DEFAULTS["q_depth"])
+    ap.add_argument("--rsmaa-alpha", type=float, default=RSMAA_DEFAULTS["alpha"])
+    ap.add_argument("--rsmaa-heuristic", default=RSMAA_DEFAULTS["heuristic"],
+                    choices=["MDP", "POMDP"])
+    ap.add_argument("--rsmaa-rec-type", default=RSMAA_DEFAULTS["rec_type"])
+    ap.add_argument("--rsmaa-maxrec", type=int, default=RSMAA_DEFAULTS["maxrec"])
+    ap.add_argument("--rsmaa-memory", type=int, default=RSMAA_DEFAULTS["memory"])
+    ap.add_argument("--iter-limit", type=int, default=RSMAA_DEFAULTS["iter_limit"])
+    ap.add_argument("--verbose-rsmaa", action="store_true")
     args = ap.parse_args()
     global PERP_KM
     PERP_KM = args.perp
     initialize_eop()
+
+    rsmaa_cfg = dict(RSMAA_DEFAULTS)
+    rsmaa_cfg.update(
+        cluster_type=args.rsmaa_cluster_type, maxit=args.rsmaa_maxit,
+        q_depth=args.rsmaa_q_depth, alpha=args.rsmaa_alpha,
+        heuristic=args.rsmaa_heuristic, rec_type=args.rsmaa_rec_type,
+        maxrec=args.rsmaa_maxrec, memory=args.rsmaa_memory,
+        iter_limit=args.iter_limit, verbose=args.verbose_rsmaa,
+    )
+    variants = [v.strip() for v in args.variants.split(",") if v.strip()]
 
     # v1's CSV/plot pipeline (same schema, same figure style) — reused, not reimplemented.
     from compare_variants import (write_csv, plot_summary, plot_burn_timing,
@@ -242,8 +436,11 @@ def main():
 
     print(f"\nv2 matched-metric comparison  (init dt={args.init_dt} km, perp={args.perp} km)")
     print("=" * 60)
-    for variant in ("centralized", "sdec"):
-        er, cp, burns, comp, term_dt, act_mass, note = solve_and_eval(variant, init_b)
+    sync_count = {"centralized": D.N_STAGES, "sdec": len(TV.CONTACT_STAGES), "dec": 0}
+    for variant in variants:
+        is_dec = (variant == "dec")
+        er, cp, burns, comp, term_dt, act_mass, note = solve_and_eval(
+            variant, init_b, rsmaa=is_dec, rsmaa_cfg=rsmaa_cfg)
         label = _VARIANT_LABEL[variant]
         bstr = ",".join(f"s{k}:{burns[k]:.2f}" for k in range(D.N_STAGES) if burns[k] > 0.01)
         print(f"  {variant:<12} expected_return={er:>10.4f}  collision_prob={cp:.4f}")
@@ -259,8 +456,7 @@ def main():
             "variant": label, "matrix_variant": variant, "init_bin": INIT_BIN,
             "expected_return": er, "collision_prob": cp,
             "expected_dv_ms": float(burns.sum()) * float(DV_MAGNITUDE),
-            "expected_syncs": len({"centralized": list(range(D.N_STAGES)),
-                                   "sdec": list(TV.CONTACT_STAGES)}[variant]),
+            "expected_syncs": sync_count[variant],
         })
         for k in range(D.N_STAGES):
             burn_rows.append({
@@ -286,7 +482,6 @@ def main():
                 "variant": label, "matrix_variant": variant, "init_bin": INIT_BIN,
                 "stage": k, "joint_action": int(ja_dom), "action_prob": float(prob),
             })
-    print("  dec          [RS-MAA* port pending — not solved with wrong solver]")
     print("=" * 60)
 
     tag = args.tag
