@@ -23,6 +23,7 @@ from brahe import (
     initialize_eop,
     state_koe_to_eci, state_rtn_to_eci, state_eci_to_rtn,
     NumericalOrbitPropagator, NumericalPropagationConfig, ForceModelConfig,
+    KeplerianPropagator,
     par_propagate_to,
 )
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -241,12 +242,69 @@ def perfect_shared_obs_for_state(miss_bin: int, dev1_bin: int, dev2_bin: int) ->
     p_joint[joint_obs_index(o1, o2)] = 1.0
     return p_joint
 
-def make_prop(epoch: Epoch, eci: np.ndarray) -> NumericalOrbitPropagator:
+# Propagator backend for matrix construction.
+#   "numerical" : NumericalOrbitPropagator with ForceModelConfig.two_body()
+#                 (integrates two-body; this is the historical baseline)
+#   "keplerian" : KeplerianPropagator (closed-form two-body; brahe docs note
+#                 two_body() is "equivalent to Keplerian propagation"). Much
+#                 faster over long horizons and free of integration error.
+# Both are PURE TWO-BODY (no J2/drag). Switching backends does not change the
+# physics model, only how the same two-body motion is computed.
+PROPAGATOR_BACKEND = "numerical"
+
+# Drag-backend physical parameters [mass(kg), drag_area(m^2), Cd, srp_area(m^2), Cr].
+# Used only when PROPAGATOR_BACKEND == "drag" (leo_default force model with
+# J2+drag+SRP+third-body). Literature-default smallsat values.
+DRAG_PARAMS = np.array([150.0, 1.0, 2.2, 1.0, 1.3])
+_SW_INITIALIZED = False
+
+def _ensure_sw():
+    global _SW_INITIALIZED
+    if not _SW_INITIALIZED:
+        from brahe import initialize_sw
+        initialize_sw()
+        _SW_INITIALIZED = True
+
+def make_prop(epoch: Epoch, eci: np.ndarray):
+    if PROPAGATOR_BACKEND == "keplerian":
+        return KeplerianPropagator.from_eci(epoch, np.asarray(eci, dtype=float), 60.0)
+    if PROPAGATOR_BACKEND == "drag":
+        _ensure_sw()
+        return NumericalOrbitPropagator(
+            epoch, eci,
+            NumericalPropagationConfig.default(),
+            ForceModelConfig.leo_default(),
+            DRAG_PARAMS,
+        )
     return NumericalOrbitPropagator(
         epoch, eci,
         NumericalPropagationConfig.default(),
         ForceModelConfig.two_body()
     )
+
+def propagate_batch_to(epochs0, ecis, target: Epoch):
+    """
+    Propagate many states (each from its own start epoch) to a common target.
+
+    numerical backend: builds NumericalOrbitPropagator objects and runs a single
+        par_propagate_to (parallel) call -- requires identical target epoch.
+    keplerian backend: uses the closed-form KeplerianPropagator.state(target);
+        par_propagate_to / propagate_to are NOT used because brahe's Keplerian
+        propagate_to steps in step_size increments and does not land exactly on
+        the target epoch (it composes incorrectly across legs). .state(epoch) is
+        the exact analytic state and round-trips to <1 m.
+
+    Returns a list of 6-vectors aligned with `ecis`.
+    """
+    if PROPAGATOR_BACKEND == "keplerian":
+        out = []
+        for e0, eci in zip(epochs0, ecis):
+            p = KeplerianPropagator.from_eci(e0, np.asarray(eci, dtype=float), 60.0)
+            out.append(np.array(p.state(target)[:6]))
+        return out
+    props = [make_prop(e0, eci) for e0, eci in zip(epochs0, ecis)]
+    par_propagate_to(props, target)
+    return [np.array(p.current_state()[:6]) for p in props]
 
 def apply_maneuver(eci: np.ndarray, action: int, dv: float = None) -> np.ndarray:
     """Apply impulsive along-track delta-v in ECI. Uses DV_MAGNITUDE if dv not given."""
@@ -266,9 +324,7 @@ def apply_maneuver(eci: np.ndarray, action: int, dv: float = None) -> np.ndarray
 
 def propagate(epoch_start: Epoch, eci: np.ndarray, epoch_end: Epoch) -> np.ndarray:
     """Propagate ECI state from epoch_start to epoch_end, return 6-vector."""
-    prop = make_prop(epoch_start, eci)
-    prop.propagate_to(epoch_end)
-    return np.array(prop.current_state()[:6])
+    return propagate_batch_to([epoch_start], [eci], epoch_end)[0]
 
 def sc1_eci_at_tca() -> np.ndarray:
     return np.array(state_koe_to_eci(SC1_OE_AT_TCA, AngleFormat.DEGREES))
@@ -416,57 +472,58 @@ def build_matrices(verbose: bool = True, dv_magnitude: float = None,
     sc1_tca = sc1_eci_at_tca()
     sc2_tca_per_bin = [place_sc2_at_tca(mb) for mb in range(N_MISS)]
 
-    # Batch back-propagation: propagate all (SC1 + N_MISS SC2s) to each stage at once.
+    # Back-propagation: per stage, propagate (SC1 + N_MISS SC2s) from TCA to the
+    # stage epoch. Each stage has a distinct target epoch, so it is its own batch.
     sc1_at_stage = []
     sc2_at_stage = [[] for _ in range(N_MISS)]
     for k in range(N_STAGES):
-        props = [make_prop(EPOCH_TCA, sc1_tca)] + \
-                [make_prop(EPOCH_TCA, sc2_tca_per_bin[mb]) for mb in range(N_MISS)]
-        par_propagate_to(props, STAGE_EPOCHS[k])
-        sc1_at_stage.append(np.array(props[0].current_state()[:6]))
+        ecis = [sc1_tca] + [sc2_tca_per_bin[mb] for mb in range(N_MISS)]
+        epochs0 = [EPOCH_TCA] * len(ecis)
+        states = propagate_batch_to(epochs0, ecis, STAGE_EPOCHS[k])
+        sc1_at_stage.append(states[0])
         for mb in range(N_MISS):
-            sc2_at_stage[mb].append(np.array(props[1 + mb].current_state()[:6]))
+            sc2_at_stage[mb].append(states[1 + mb])
 
     if verbose:
         print("  Reference states back-propagated to all stages (parallel).")
 
-    # Process one stage at a time, batching all forward propagations with par_propagate_to.
+    # Forward-propagate every post-burn state to TCA.
+    #
+    # The post-burn TCA state is far less varied than the full (stage, miss_bin,
+    # joint_action) grid suggests:
+    #   - SC1's post-burn trajectory depends only on (stage, burn1) -- not on the
+    #     miss bin (which only places SC2) nor on SC2's burn.
+    #   - SC2's post-burn trajectory depends only on (stage, miss_bin, burn2).
+    # So per stage there are just N_BURN unique SC1 props and N_MISS*N_BURN unique
+    # SC2 props (33 for the current model), versus N_MISS*2*N_BURN**2 = 180 if we
+    # naively propagated every combination. All forward props share the same target
+    # epoch (EPOCH_TCA), so the numerical backend runs them in one parallel call.
+    sc1_epochs0, sc1_ecis, sc1_key_list = [], [], []   # keys: (stage, burn1)
+    sc2_epochs0, sc2_ecis, sc2_key_list = [], [], []   # keys: (stage, miss_bin, burn2)
+
     for k in range(N_STAGES):
-        # For each (miss_bin, joint_action) we need sc1_post and sc2_post propagated to TCA.
-        # Total propagators per stage: N_MISS * (2*N_JOINT_ACTIONS) forward props.
-
-        # Build propagator list and an index map to retrieve results.
-        prop_list = []
-        # index_map entries: (miss_bin, burn1, burn2, 'sc1'/'sc2')
-        index_map = []
-
+        for burn1 in range(N_BURN_AGENT):
+            sc1_epochs0.append(STAGE_EPOCHS[k])
+            sc1_ecis.append(apply_maneuver(sc1_at_stage[k], burn1, dv=dv_magnitude))
+            sc1_key_list.append((k, burn1))
         for mb in range(N_MISS):
-            sc1_eci = sc1_at_stage[k]
-            sc2_eci = sc2_at_stage[mb][k]
+            for burn2 in range(N_BURN_AGENT):
+                sc2_epochs0.append(STAGE_EPOCHS[k])
+                sc2_ecis.append(apply_maneuver(sc2_at_stage[mb][k], burn2, dv=dv_magnitude))
+                sc2_key_list.append((k, mb, burn2))
 
-            # Propagate unique burn combos only (9, not 36) â€” sync flag is irrelevant for dynamics
-            for burn1 in range(N_BURN_AGENT):
-                for burn2 in range(N_BURN_AGENT):
-                    prop_list.append(make_prop(STAGE_EPOCHS[k], apply_maneuver(sc1_eci, burn1, dv=dv_magnitude)))
-                    index_map.append((mb, burn1, burn2, 'sc1'))
-                    prop_list.append(make_prop(STAGE_EPOCHS[k], apply_maneuver(sc2_eci, burn2, dv=dv_magnitude)))
-                    index_map.append((mb, burn1, burn2, 'sc2'))
+    sc1_states = propagate_batch_to(sc1_epochs0, sc1_ecis, EPOCH_TCA)
+    sc2_states = propagate_batch_to(sc2_epochs0, sc2_ecis, EPOCH_TCA)
 
-        # Single parallel propagation call for all propagators at this stage
-        par_propagate_to(prop_list, EPOCH_TCA)
+    sc1_tca_prop = dict(zip(sc1_key_list, sc1_states))   # (k, burn1) -> state
+    sc2_tca_prop = dict(zip(sc2_key_list, sc2_states))   # (k, mb, burn2) -> state
 
-        # Unpack results into lookup dicts
-        sc1_tca_prop  = {}   # (mb, burn1, burn2) -> state
-        sc2_tca_prop  = {}
+    if verbose:
+        print(f"  Forward-propagated {len(sc1_states) + len(sc2_states)} "
+              f"unique post-burn states to TCA [{PROPAGATOR_BACKEND}].")
 
-        for idx, (mb, burn1, burn2, role) in enumerate(index_map):
-            state = np.array(prop_list[idx].current_state()[:6])
-            if role == 'sc1':
-                sc1_tca_prop[(mb, burn1, burn2)] = state
-            else:
-                sc2_tca_prop[(mb, burn1, burn2)] = state
-
-        # Now compute T, O, R from the propagated states.
+    # Now compute T, O, R from the propagated states.
+    for k in range(N_STAGES):
         for mb in range(N_MISS):
             for dev1 in range(N_DEV):
                 for dev2 in range(N_DEV):
@@ -476,8 +533,8 @@ def build_matrices(verbose: bool = True, dv_magnitude: float = None,
                         burn1, burn2 = split_joint_action(a)
 
                         rtn_tca = np.array(state_eci_to_rtn(
-                            sc1_tca_prop[(mb, burn1, burn2)],
-                            sc2_tca_prop[(mb, burn1, burn2)]))
+                            sc1_tca_prop[(k, burn1)],
+                            sc2_tca_prop[(k, mb, burn2)]))
                         rtn_pos_tca_km = rtn_tca[:3] / 1e3
                         any_burn = (burn1 != ACT_WAIT) or (burn2 != ACT_WAIT)
 
@@ -512,8 +569,7 @@ def build_matrices(verbose: bool = True, dv_magnitude: float = None,
                         else:
                             T[a, s, SINK_STATE] = 1.0
         if verbose:
-            print(f"  ... stage {k}/{N_STAGES - 1} done  "
-                  f"({N_MISS * (2 * N_BURN_AGENT**2)} props batched)")
+            print(f"  ... stage {k}/{N_STAGES - 1} matrices built")
 
     # Sink state: absorbing
     for a in range(n_joint_acts):
