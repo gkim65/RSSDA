@@ -22,6 +22,7 @@ sys.path.insert(0, _ROOT); sys.path.insert(0, _BENCHMARKS); sys.path.insert(0, _
 from RSSDA import SDecPOMDP, SDecPOMDPModel, RSSDAConfig
 import spacecraft_discretizer_v2 as D
 import spacecraft_transition_v2 as TV
+import spacecraft_matrices as M
 
 ACT_NAMES = {0: 'WAIT', 1: '+dVT', 2: '-dVT'}
 
@@ -81,7 +82,7 @@ def run_one(belief_label, init_b, perp):
     """Solve all 3 variants under a given initial belief; return {variant: value}."""
     contact_by_variant = {
         "centralized": list(range(D.N_STAGES)),
-        "sdec": list(TV.CONTACT_STAGES),
+        "sdec": M.get_contact_stages(),
         "dec": [],
     }
     print(f"\n{'='*70}\nBELIEF: {belief_label}   (perp={perp} km)\n{'='*70}")

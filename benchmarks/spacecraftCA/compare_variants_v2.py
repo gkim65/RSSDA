@@ -15,8 +15,9 @@ v1-specific; we report the value (the matched metric) and flag the diagnostics a
 v1-semantic for now.
 
 Usage:
-  python compare_variants_v2.py --init-dt 0          # dangerous (collision-course)
-  python compare_variants_v2.py --init-dt 0 --compare-v1   # also solve v1 side-by-side
+  python compare_variants_v2.py                       # default head-on (init_miss=0)
+  python compare_variants_v2.py --init-miss 0.3 --perp 3   # perp-aware dangerous conj
+  python compare_variants_v2.py --contact-stages 13,15     # Scenario-1 contact subset
 """
 import os, sys, argparse, math, io, contextlib
 from array import array
@@ -33,6 +34,7 @@ from baselines.decPOMDP import DecPOMDP as RSMAA
 
 import spacecraft_transition_v2 as TV
 import spacecraft_discretizer_v2 as D
+import spacecraft_matrices as M
 from sdec_spacecraft import build_config
 from spacecraft_matrices import DV_MAGNITUDE
 
@@ -324,7 +326,7 @@ def solve_and_eval(variant, init_b, rsmaa=False, rsmaa_cfg=None):
             T, O, R, full, init_b)
         return er, cp, burns, comp, term_dt, act_mass, None
     cs = {"centralized": list(range(D.N_STAGES)),
-          "sdec": list(TV.CONTACT_STAGES)}[variant]
+          "sdec": M.get_contact_stages()}[variant]
     model = v2_model(T, O, R, init_b, cs)
     sdec = SDecPOMDP(model=model, config=build_config_fixed())
     full = sdec.multi_agent_astar(D.N_STAGES)
@@ -380,9 +382,21 @@ def plot_reward_parts(parts_rows, fig_dir, tag):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--init-dt", type=float, default=0.0,
-                    help="initial along-track offset (km); 0 = collision course")
+    ap.add_argument("--init-miss", type=float, default=0.0,
+                    help="TOTAL initial miss (km), perp-aware DANGER dial (default 0 = "
+                         "collision course). dt center is back-solved so "
+                         "sqrt(dt^2+perp^2)=init_miss. <1 km => must maneuver; ~5 km => "
+                         "already-clear control. If <=perp the conjunction is "
+                         "unflaggable (clamped, reported). Default init_miss=0, "
+                         "spread=1.4, perp=0 reproduces the historical {0,0.7,1.4} belief.")
+    ap.add_argument("--init-spread", type=float, default=1.4,
+                    help="half-width (km) of the |dt| spread about the center "
+                         "(UNCERTAINTY dial — what sync resolves). Default 1.4.")
     ap.add_argument("--perp", type=float, default=0.0)
+    ap.add_argument("--contact-stages", type=str, default=None,
+                    help="comma-separated stage indices for SDec sync contacts "
+                         "(e.g. '13,15'). Overrides the default GS windows. Empty "
+                         "string => no contacts. Affects O matrix + sync_states + count.")
     ap.add_argument("--tag", type=str, default="refined_drift_main_v2",
                     help="output tag (CSV + figures). Sits beside the v1 baseline.")
     ap.add_argument("--out-dir", type=str,
@@ -410,6 +424,13 @@ def main():
     PERP_KM = args.perp
     initialize_eop()
 
+    # --- contact-timing override (Scenario-1 ablation). Sets the SINGLE global that
+    #     the v2 O-matrix builder, the v1 builder, and SDec sync_states all read. ---
+    if args.contact_stages is not None:
+        stages = [int(s) for s in args.contact_stages.split(",") if s.strip() != ""]
+        M.set_contact_stages(stages)
+    print(f"  SDec contact stages: {M.get_contact_stages()}")
+
     rsmaa_cfg = dict(RSMAA_DEFAULTS)
     rsmaa_cfg.update(
         cluster_type=args.rsmaa_cluster_type, maxit=args.rsmaa_maxit,
@@ -424,19 +445,23 @@ def main():
     from compare_variants import (write_csv, plot_summary, plot_burn_timing,
                                   plot_action_schedule)
 
-    # SOLVE belief: spread over the dangerous dt region — the signed analog of v1's
-    # belief_bins=[0,1,2] (miss < 2km). v1 solves the policy from this SPREAD (so the
-    # agents are genuinely uncertain and sync has something to resolve), then evaluates.
-    # |dt| in {0, ~0.7, ~1.4} km, both signs -> the central + first bins each side.
-    init_b = TV.build_init_b_spread([0.0, 0.7, 1.4], sign_mode="both")
+    # SOLVE belief: perp-AWARE 2-knob spread (danger x uncertainty) so the agents are
+    # genuinely uncertain (sync has something to resolve), then evaluate. The default
+    # (init_miss=0, spread=1.4, perp=0) reproduces the historical {0,0.7,1.4} belief.
+    init_b, flagged, eff_miss = TV.build_init_b_danger(
+        args.init_miss, args.init_spread, args.perp, sign_mode="both")
+    flag_str = "FLAGGED (dangerous)" if flagged else \
+        "NOT flaggable (miss<=perp; geometry already clears it — exclude from sweeps)"
+    print(f"  init belief: init_miss={args.init_miss} spread={args.init_spread} "
+          f"perp={args.perp} -> effective miss={eff_miss:.3f} km [{flag_str}]")
 
     # init_bin axis: the v2 spread is a single belief, so we report it as one bin (0).
     INIT_BIN = 0
     summary_rows, burn_rows, parts_rows, action_rows = [], [], [], []
 
-    print(f"\nv2 matched-metric comparison  (init dt={args.init_dt} km, perp={args.perp} km)")
+    print(f"\nv2 matched-metric comparison  (init_miss={args.init_miss} km, perp={args.perp} km)")
     print("=" * 60)
-    sync_count = {"centralized": D.N_STAGES, "sdec": len(TV.CONTACT_STAGES), "dec": 0}
+    sync_count = {"centralized": D.N_STAGES, "sdec": len(M.get_contact_stages()), "dec": 0}
     for variant in variants:
         is_dec = (variant == "dec")
         er, cp, burns, comp, term_dt, act_mass, note = solve_and_eval(

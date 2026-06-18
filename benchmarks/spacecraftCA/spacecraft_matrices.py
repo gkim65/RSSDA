@@ -82,8 +82,26 @@ _ALL_TIMES_H = sorted(
 STAGE_T_BEFORE_TCA_SEC = [h * 3600.0 for h in _ALL_TIMES_H]
 STAGE_EPOCHS = [EPOCH_TCA - dt for dt in STAGE_T_BEFORE_TCA_SEC]
 
-# Indices of stages that are GS contact windows (sync/centralization triggers)
+# Indices of stages that are GS contact windows (sync/centralization triggers).
+# SINGLE SOURCE OF TRUTH: every consumer (this module's v1 builder, the v2 builder in
+# spacecraft_transition_v2, and compare_variants_v2's SDec sync_states) must read THIS
+# global. To override it (e.g. the Scenario-1 contact-timing ablation) call
+# set_contact_stages() — do NOT rebind the name, which would orphan callers that
+# imported a copy. Mutating in place keeps existing list bindings consistent.
 CONTACT_STAGES = [i for i, h in enumerate(_ALL_TIMES_H) if h in _GS_TIMES_H]
+
+
+def set_contact_stages(stages):
+    """Override the global GS contact-stage list IN PLACE (so any module that holds a
+    binding to this list — historically spacecraft_transition_v2 — sees the change).
+    Pass an iterable of stage indices (subset of range(N_STAGES)); [] = no contacts."""
+    stages = sorted({int(s) for s in stages})
+    CONTACT_STAGES[:] = stages
+    return CONTACT_STAGES
+
+
+def get_contact_stages():
+    return list(CONTACT_STAGES)
 
 # Reward constants
 REWARD_COLLISION = -10000.0  # miss < 1 km at TCA

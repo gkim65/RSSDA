@@ -20,13 +20,18 @@ import numpy as np
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
+import spacecraft_matrices as M
 from spacecraft_matrices import (
     sc1_eci_at_tca, apply_maneuver, propagate_batch_to,
     STAGE_EPOCHS, EPOCH_TCA, DV_MAGNITUDE,
     PROCESS_DRIFT_SIGMA_KM_PER_SQRT_H,
-    TRANSITION_NOISE_N_SAMPLES, ACT_WAIT, CONTACT_STAGES,
+    TRANSITION_NOISE_N_SAMPLES, ACT_WAIT,
     state_eci_to_rtn, state_rtn_to_eci,
 )
+# NOTE: CONTACT_STAGES is deliberately NOT imported by name. It is overridable at
+# runtime (set_contact_stages, for the contact-timing ablation); reading it live via
+# M.CONTACT_STAGES guarantees this builder uses the same list every other consumer
+# does. (Importing the name would freeze a stale copy — the old dual-binding footgun.)
 import spacecraft_discretizer_v2 as D
 
 N_STAGES = D.N_STAGES
@@ -277,7 +282,7 @@ def variant_sync_next(variant: str, next_stage: int) -> bool:
     if variant == "centralized":
         return True
     if variant == "sdec":
-        return next_stage in CONTACT_STAGES
+        return next_stage in M.CONTACT_STAGES   # read live (overridable global)
     return False  # dec
 
 
@@ -386,6 +391,65 @@ def build_init_b_spread(miss_bins_km, sign_mode="both") -> np.ndarray:
     if total <= 0:
         return build_init_b(0.0)
     return b / total
+
+
+def build_init_b_danger(init_miss_km, spread_km, perp_km, sign_mode="both"):
+    """
+    Perp-AWARE initial belief, parameterized by TWO interpretable sweep knobs:
+
+      init_miss_km : the TOTAL miss the conjunction starts at (danger dial). The
+                     along-track center is back-solved so sqrt(dt_center^2 + perp^2)
+                     == init_miss_km. init_miss < COLLISION_THRESHOLD => must-maneuver;
+                     init_miss ~ RISK_CLEARED_KM => already-clear control ("needn't
+                     maneuver", sync has nothing to resolve).
+      spread_km    : half-width of the |dt| spread about that center (uncertainty dial).
+                     This is what sync resolves. spread=0 => point belief.
+      perp_km      : the fixed sideways standoff (composes with init_miss; an along-track
+                     burn cannot reduce it).
+
+    Geometry floor: if init_miss_km <= perp_km the requested total miss is UNREACHABLE
+    (perp alone exceeds it). We clamp the center to dt=0 (closest the geometry allows)
+    and return (belief, flagged=False) so sweep code can DROP it — such a conjunction
+    sits at miss>=perp>=init_miss and would not be flagged in a CDM. Otherwise
+    flagged=True.
+
+    Returns (init_b, flagged, effective_miss_km).
+    """
+    perp_km = float(perp_km)
+    init_miss_km = float(init_miss_km)
+    # Back-solve the along-track center so sqrt(dt^2+perp^2)=init_miss. If perp alone
+    # already meets/exceeds the requested total miss, dt is unreachable -> clamp center
+    # to 0 (closest the geometry allows) and the effective miss is the perp floor.
+    perp_floor = (perp_km >= init_miss_km)
+    if perp_floor:
+        dt_center = 0.0
+        eff_miss = perp_km
+    else:
+        dt_center = float(np.sqrt(init_miss_km * init_miss_km - perp_km * perp_km))
+        eff_miss = init_miss_km
+    # "flagged" = would a CDM flag this conjunction = effective miss still inside the
+    # screening-clear floor. init_miss=perp=0 (head-on collision course) -> eff 0 ->
+    # flagged. Pure cross-track with perp>=RISK_CLEARED_KM -> eff>=floor -> NOT flagged.
+    flagged = eff_miss < RISK_CLEARED_KM
+
+    b = np.zeros(D.N_STATES_TOTAL, dtype=np.float64)
+    spread_km = max(0.0, float(spread_km))
+    # |dt| samples about the center at half-step granularity:
+    #   {center-spread, center-spread/2, center, center+spread/2, center+spread},
+    # clamped to >=0. At center=0, spread=1.4 this is {0, 0.7, 1.4} — the historical
+    # default belief — so dropping the old --init-dt path changes nothing.
+    mags = {dt_center}
+    if spread_km > 0:
+        for d in (spread_km, spread_km / 2.0):
+            mags.add(max(0.0, dt_center - d))
+            mags.add(dt_center + d)
+    signs = [+1.0, -1.0] if sign_mode == "both" else [+1.0]
+    for m in mags:
+        for s in signs:
+            b[D.state_index(D.dt_to_bin(s * m), D.VDEV_ZERO, D.VDEV_ZERO, 0)] += 1.0
+    total = b.sum()
+    init_b = b / total if total > 0 else build_init_b(dt_center)
+    return init_b, flagged, eff_miss
 
 
 def build_matrices_v2(variant: str, perp_km: float = 0.0, dt0_km: float = 2.0,
