@@ -24,13 +24,49 @@ import numpy as np
 from brahe import (
     Epoch, AngleFormat, R_EARTH,
     location_accesses, ElevationConstraint, PointLocation, AccessSearchConfig,
-    KeplerianPropagator,
+    KeplerianPropagator, NumericalOrbitPropagator, NumericalPropagationConfig,
+    ForceModelConfig,
     state_koe_to_eci, state_rtn_to_eci, state_eci_to_koe,
     initialize_eop,
 )
 import brahe
 
 D = AngleFormat.DEGREES
+
+# ---------------------------------------------------------------------------
+# Propagator backend — ONE setting governs ALL propagation (matrices, transition,
+# generator, AND this module's contact computation). Single source of truth so the
+# whole pipeline is consistent: drag everywhere or two-body everywhere.
+#   "numerical" : NumericalOrbitPropagator + two_body()  (default; fast; debug/tests)
+#   "keplerian" : closed-form two-body KeplerianPropagator (fastest over long horizons)
+#   "drag"      : NumericalOrbitPropagator + leo_default() (J2+drag+SRP+third-body) — use
+#                 for EXPERIMENT runs. Slower; needs space weather.
+# Override at runtime (no code edit) via env SPACECRAFT_PROPAGATOR, or compare_variants_v2
+# --backend. Default = two-body for quick tests; set drag explicitly for experiments.
+PROPAGATOR_BACKEND = os.environ.get("SPACECRAFT_PROPAGATOR", "numerical").lower()
+# Drag-backend smallsat params [mass(kg), drag_area(m^2), Cd, srp_area(m^2), Cr].
+DRAG_PARAMS = np.array([150.0, 1.0, 2.2, 1.0, 1.3])
+
+_SW_INITIALIZED = False
+
+
+def _ensure_sw():
+    global _SW_INITIALIZED
+    if not _SW_INITIALIZED:
+        from brahe import initialize_sw
+        initialize_sw()
+        _SW_INITIALIZED = True
+
+
+def set_propagator_backend(backend: str):
+    """Set the global propagator backend for the WHOLE pipeline (matrices/transition/
+    generator/contacts all read this). One of: numerical | keplerian | drag."""
+    global PROPAGATOR_BACKEND
+    backend = backend.lower()
+    if backend not in ("numerical", "keplerian", "drag"):
+        raise ValueError(f"backend must be numerical|keplerian|drag, got {backend!r}")
+    PROPAGATOR_BACKEND = backend
+    return PROPAGATOR_BACKEND
 
 # ---------------------------------------------------------------------------
 # Scenario reference (kept here so discretizer + matrices agree)
@@ -42,7 +78,7 @@ SC1_OE_AT_TCA = np.array([
     R_EARTH + 550e3, 0.001, 55.0, 20.0, 0.0, 0.0,
 ])
 
-V_REL_MS = 15.0  # along-track closing speed at TCA (m/s) — must match matrices.V_REL_MS
+V_REL_MS = 15.0  # along-track closing speed at TCA (m/s). Canonical here; matrices re-exports.
 
 # ---------------------------------------------------------------------------
 # Decision cadence + merge threshold
@@ -114,8 +150,28 @@ def _ensure_eop():
         _EOP_READY = True
 
 
-def _prop(oe_at_tca, epoch_tca):
-    return KeplerianPropagator.from_keplerian(epoch_tca, oe_at_tca, D, step_size=60.0)
+def _prop(oe_at_tca, epoch_tca, t_start=None):
+    """Build a propagator for the contact search, honoring the global PROPAGATOR_BACKEND so
+    contacts use the SAME physics as the matrix/transition/generator propagation. Seeded at
+    TCA (the natural epoch the elements are defined at). For numerical/drag we PRIME the
+    propagator backward to t_start via propagate_to() so its valid range covers the whole
+    search window [t_start, TCA] (the integrator extends its range on demand but
+    location_accesses needs it pre-covered). Keplerian is closed-form (any epoch)."""
+    if PROPAGATOR_BACKEND == "keplerian":
+        return KeplerianPropagator.from_keplerian(epoch_tca, oe_at_tca, D, step_size=60.0)
+    eci = np.array(state_koe_to_eci(np.asarray(oe_at_tca, float), D))
+    if PROPAGATOR_BACKEND == "drag":
+        _ensure_sw()
+        prop = NumericalOrbitPropagator(
+            epoch_tca, eci, NumericalPropagationConfig.default(),
+            ForceModelConfig.leo_default(), DRAG_PARAMS)
+    else:
+        prop = NumericalOrbitPropagator(
+            epoch_tca, eci, NumericalPropagationConfig.default(),
+            ForceModelConfig.two_body())
+    if t_start is not None:
+        prop.propagate_to(t_start)   # extend valid range backward to cover the search window
+    return prop
 
 
 def _windows(prop, stations, t_start, t_end):
@@ -196,8 +252,8 @@ def compute_contact_times_h(sc1_oe, sc2_oe, epoch_tca, horizon_h, stations=None,
     _ensure_eop()
     stations = gs_network() if stations is None else stations
     t_start = epoch_tca - horizon_h * 3600.0
-    w1 = _windows(_prop(sc1_oe, epoch_tca), stations, t_start, epoch_tca)
-    w2 = _windows(_prop(sc2_oe, epoch_tca), stations, t_start, epoch_tca)
+    w1 = _windows(_prop(sc1_oe, epoch_tca, t_start), stations, t_start, epoch_tca)
+    w2 = _windows(_prop(sc2_oe, epoch_tca, t_start), stations, t_start, epoch_tca)
     if sync_rule == "simultaneous":
         return _simultaneous_midpoints_h(w1, w2, epoch_tca)
     return _later_contact_sync_h(w1, w2, epoch_tca)

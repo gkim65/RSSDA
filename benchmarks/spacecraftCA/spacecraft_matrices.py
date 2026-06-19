@@ -61,11 +61,13 @@ DV_MAGNITUDE    = 0.5                 # m/s  (good bin differentiation; use --dv
 # orbit-dependent). This module re-exports the names so existing importers keep working.
 # The old frozen _GS_TIMES_H / hardcoded 16-stage union path is gone — contacts are
 # computed from the real GS network x conjunction orbits (notes/LITERATURE_GS_NETWORK.md).
+import spacecraft_stage_grid as _SG
 from spacecraft_stage_grid import (
     EPOCH_TCA, SC1_OE_AT_TCA, V_REL_MS,
     STAGE_T_BEFORE_TCA_SEC, STAGE_EPOCHS, CONTACT_STAGES,
     set_contact_stages, get_contact_stages,
     compute_stage_grid, sc2_oe_from_rtn,
+    DRAG_PARAMS, set_propagator_backend,
 )
 
 # Reward constants
@@ -225,34 +227,19 @@ def perfect_shared_obs_for_state(miss_bin: int, dev1_bin: int, dev2_bin: int) ->
     p_joint[joint_obs_index(o1, o2)] = 1.0
     return p_joint
 
-# Propagator backend for matrix construction.
-#   "numerical" : NumericalOrbitPropagator with ForceModelConfig.two_body()
-#                 (integrates two-body; this is the historical baseline)
-#   "keplerian" : KeplerianPropagator (closed-form two-body; brahe docs note
-#                 two_body() is "equivalent to Keplerian propagation"). Much
-#                 faster over long horizons and free of integration error.
-# Both are PURE TWO-BODY (no J2/drag). Switching backends does not change the
-# physics model, only how the same two-body motion is computed.
-PROPAGATOR_BACKEND = "numerical"
-
-# Drag-backend physical parameters [mass(kg), drag_area(m^2), Cd, srp_area(m^2), Cr].
-# Used only when PROPAGATOR_BACKEND == "drag" (leo_default force model with
-# J2+drag+SRP+third-body). Literature-default smallsat values.
-DRAG_PARAMS = np.array([150.0, 1.0, 2.2, 1.0, 1.3])
-_SW_INITIALIZED = False
-
-def _ensure_sw():
-    global _SW_INITIALIZED
-    if not _SW_INITIALIZED:
-        from brahe import initialize_sw
-        initialize_sw()
-        _SW_INITIALIZED = True
+# Propagator backend = SINGLE SOURCE OF TRUTH in spacecraft_stage_grid (so matrices,
+# transition_v2, conjunction_generator, AND the GS-contact search all use the SAME
+# physics: drag everywhere or two-body everywhere). Set via env SPACECRAFT_PROPAGATOR,
+# compare_variants_v2 --backend, or SG.set_propagator_backend(). make_prop reads the live
+# _SG.PROPAGATOR_BACKEND each call so a runtime switch propagates here too. (_SG +
+# DRAG_PARAMS + set_propagator_backend imported once at the top of this module.)
 
 def make_prop(epoch: Epoch, eci: np.ndarray):
-    if PROPAGATOR_BACKEND == "keplerian":
+    backend = _SG.PROPAGATOR_BACKEND
+    if backend == "keplerian":
         return KeplerianPropagator.from_eci(epoch, np.asarray(eci, dtype=float), 60.0)
-    if PROPAGATOR_BACKEND == "drag":
-        _ensure_sw()
+    if backend == "drag":
+        _SG._ensure_sw()
         return NumericalOrbitPropagator(
             epoch, eci,
             NumericalPropagationConfig.default(),
@@ -279,7 +266,7 @@ def propagate_batch_to(epochs0, ecis, target: Epoch):
 
     Returns a list of 6-vectors aligned with `ecis`.
     """
-    if PROPAGATOR_BACKEND == "keplerian":
+    if _SG.PROPAGATOR_BACKEND == "keplerian":
         out = []
         for e0, eci in zip(epochs0, ecis):
             p = KeplerianPropagator.from_eci(e0, np.asarray(eci, dtype=float), 60.0)
@@ -503,7 +490,7 @@ def build_matrices(verbose: bool = True, dv_magnitude: float = None,
 
     if verbose:
         print(f"  Forward-propagated {len(sc1_states) + len(sc2_states)} "
-              f"unique post-burn states to TCA [{PROPAGATOR_BACKEND}].")
+              f"unique post-burn states to TCA [{_SG.PROPAGATOR_BACKEND}].")
 
     # Now compute T, O, R from the propagated states.
     for k in range(N_STAGES):

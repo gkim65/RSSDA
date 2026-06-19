@@ -28,6 +28,15 @@ _BENCHMARKS = os.path.dirname(_HERE)
 _ROOT = os.path.dirname(_BENCHMARKS)
 sys.path.insert(0, _ROOT); sys.path.insert(0, _BENCHMARKS); sys.path.insert(0, _HERE)
 
+# --backend must be honored BEFORE the model modules import, because the stage grid
+# (and the discretizers' N_STAGES / N_STATES) are computed at IMPORT time from the
+# propagator backend. Pre-scan argv and set the env var the grid reads at import.
+for _i, _a in enumerate(sys.argv):
+    if _a == "--backend" and _i + 1 < len(sys.argv):
+        os.environ["SPACECRAFT_PROPAGATOR"] = sys.argv[_i + 1].lower()
+    elif _a.startswith("--backend="):
+        os.environ["SPACECRAFT_PROPAGATOR"] = _a.split("=", 1)[1].lower()
+
 from brahe import initialize_eop
 from RSSDA import SDecPOMDP, SDecPOMDPModel, int_tuple
 from baselines.decPOMDP import DecPOMDP as RSMAA
@@ -406,6 +415,10 @@ def main():
     ap.add_argument("--no-figures", action="store_true")
     ap.add_argument("--variants", type=str, default="centralized,sdec,dec",
                     help="comma-separated subset of centralized,sdec,dec")
+    ap.add_argument("--backend", default=None, choices=["numerical", "keplerian", "drag"],
+                    help="propagator backend for the WHOLE pipeline (contacts + matrices). "
+                         "drag = experiments; numerical/keplerian = two-body (fast, debug). "
+                         "Default: env SPACECRAFT_PROPAGATOR or 'numerical'.")
     # --- RS-MAA* (Dec) knobs: each defaults to the v1-proven value, so Dec solves
     #     with no tuning. Override only if the Dec policy misbehaves. ---
     ap.add_argument("--rsmaa-cluster-type", default=RSMAA_DEFAULTS["cluster_type"])
@@ -429,6 +442,7 @@ def main():
     if args.contact_stages is not None:
         stages = [int(s) for s in args.contact_stages.split(",") if s.strip() != ""]
         M.set_contact_stages(stages)
+    print(f"  propagator backend: {M._SG.PROPAGATOR_BACKEND}  (N_STAGES={D.N_STAGES})")
     print(f"  SDec contact stages: {M.get_contact_stages()}")
 
     rsmaa_cfg = dict(RSMAA_DEFAULTS)
