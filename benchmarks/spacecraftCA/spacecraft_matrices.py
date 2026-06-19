@@ -56,52 +56,17 @@ N_ACT_AGENT     = N_BURN_AGENT         # 3
 N_JOINT_ACTIONS = N_ACT_AGENT ** 2    # 9
 
 DV_MAGNITUDE    = 0.5                 # m/s  (good bin differentiation; use --dv to sweep)
-V_REL_MS        = 15.0                # along-track closing speed at TCA (m/s)
 
-# SC1 orbital elements at TCA [a, e, i, RAAN, omega, M] (deg)
-SC1_OE_AT_TCA = np.array([
-    R_EARTH + 550e3,   # semi-major axis (m)
-    0.001,             # eccentricity
-    55.0,              # inclination (deg)
-    20.0,              # RAAN (deg)
-    0.0,               # argument of perigee (deg)
-    0.0,               # mean anomaly (deg)
-])
-EPOCH_TCA = Epoch(2025, 6, 2, 0, 0, 0.0)
-
-# 16 stages: 10 ~2h grid points merged with 6 GS contact windows.
-# T-8h and T-6h dropped since T-7.83h and T-6.17h GS contacts already cover those slots.
-# Contact stages are sync/centralization points; others are always-decentralized.
-_GS_TIMES_H = [23.39, 9.48, 7.83, 6.17, 2.80, 1.13]  # hours before TCA
-_HOUR_GRID_H = [24, 22, 20, 18, 16, 14, 12, 10, 4, 2]  # ~2h grid, T-8 and T-6 dropped
-_ALL_TIMES_H = sorted(
-    set([float(h) for h in _HOUR_GRID_H] + _GS_TIMES_H),
-    reverse=True,
-)  # 16 values, descending (T-24h first)
-
-STAGE_T_BEFORE_TCA_SEC = [h * 3600.0 for h in _ALL_TIMES_H]
-STAGE_EPOCHS = [EPOCH_TCA - dt for dt in STAGE_T_BEFORE_TCA_SEC]
-
-# Indices of stages that are GS contact windows (sync/centralization triggers).
-# SINGLE SOURCE OF TRUTH: every consumer (this module's v1 builder, the v2 builder in
-# spacecraft_transition_v2, and compare_variants_v2's SDec sync_states) must read THIS
-# global. To override it (e.g. the Scenario-1 contact-timing ablation) call
-# set_contact_stages() — do NOT rebind the name, which would orphan callers that
-# imported a copy. Mutating in place keeps existing list bindings consistent.
-CONTACT_STAGES = [i for i, h in enumerate(_ALL_TIMES_H) if h in _GS_TIMES_H]
-
-
-def set_contact_stages(stages):
-    """Override the global GS contact-stage list IN PLACE (so any module that holds a
-    binding to this list — historically spacecraft_transition_v2 — sees the change).
-    Pass an iterable of stage indices (subset of range(N_STAGES)); [] = no contacts."""
-    stages = sorted({int(s) for s in stages})
-    CONTACT_STAGES[:] = stages
-    return CONTACT_STAGES
-
-
-def get_contact_stages():
-    return list(CONTACT_STAGES)
+# Stage timeline + GS contacts now live in spacecraft_stage_grid (single source of truth,
+# orbit-dependent). This module re-exports the names so existing importers keep working.
+# The old frozen _GS_TIMES_H / hardcoded 16-stage union path is gone — contacts are
+# computed from the real GS network x conjunction orbits (notes/LITERATURE_GS_NETWORK.md).
+from spacecraft_stage_grid import (
+    EPOCH_TCA, SC1_OE_AT_TCA, V_REL_MS,
+    STAGE_T_BEFORE_TCA_SEC, STAGE_EPOCHS, CONTACT_STAGES,
+    set_contact_stages, get_contact_stages,
+    compute_stage_grid, sc2_oe_from_rtn,
+)
 
 # Reward constants
 REWARD_COLLISION = -10000.0  # miss < 1 km at TCA

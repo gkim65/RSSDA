@@ -70,7 +70,9 @@ VDEV_LABELS = ["NEG", "NOM", "POS"]
 # Stage/state sizes
 # ---------------------------------------------------------------------------
 
-N_STAGES = 16
+# N_STAGES is derived from the orbit-dependent stage grid (single source of truth in
+# spacecraft_stage_grid). Was hardcoded 16; now follows the computed contact timeline.
+from spacecraft_stage_grid import N_STAGES  # noqa: E402
 N_STAGE_STATES = N_DT * N_VDEV * N_VDEV
 N_STATES = N_STAGE_STATES * N_STAGES
 N_STATES_TOTAL = N_STATES + 1
