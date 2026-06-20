@@ -241,7 +241,17 @@ _EXEC_STD_NORMAL = _rng.standard_normal(TRANSITION_NOISE_N_SAMPLES)
 
 
 def step_hours(stage: int) -> float:
-    """Hours of coast between stage and stage+1."""
+    """Hours of coast between `stage` and the next stage.
+
+    For the LAST decision stage (N_STAGES-2 -> N_STAGES-1) the next stage IS the TCA
+    sink, so the coast must run all the way to TCA (the full remaining time-to-go),
+    not merely to STAGE_EPOCHS[N-1]. Otherwise a burn at the last decision stage only
+    drifts over the (N-2 -> N-1) leg and the final (N-1 -> TCA) leg is never integrated
+    -- which truncated a single late burn's lever to ~1/3 (rollout_v2 caught this:
+    brahe -17.2 km vs a model that stopped at -5.8 km). Earlier burns were unaffected
+    because they accumulate over many stages; only the terminal leg was dropped."""
+    if stage >= N_STAGES - 2:
+        return max(stage_t2go_h(stage), 0.0)          # coast to TCA
     return max(stage_t2go_h(stage) - stage_t2go_h(stage + 1), 0.0)
 
 
@@ -293,11 +303,16 @@ def build_T_O(rate_at: np.ndarray, variant: str, verbose: bool = False):
     Observations: sync stages reveal shared dt_bin + both vdev; off-sync reveal
     only each agent's own vdev. Terminal stage -> sink.
     """
-    mean_rate = float(np.mean(rate_at))
+    # Per-stage drift rate (rate_at[k]) instead of a single mean over all stages.
+    # The gain table already measures the true rate at each stage; using it makes the
+    # transition stage-inhomogeneous in vdev dynamics (physically correct: a burn early
+    # drifts at the early rate, late at the late rate). The mean-collapse it replaces
+    # cost ~0.1 km on the head-on case study (rollout_v2 trace), benign but free to fix.
     T = np.zeros((N_JOINT_ACTIONS, D.N_STATES_TOTAL, D.N_STATES_TOTAL), dtype=np.float64)
     O = np.zeros((N_JOINT_ACTIONS, D.N_STATES_TOTAL, N_JOINT_OBS), dtype=np.float64)
     for k in range(N_STAGES):
-        lever_k = mean_rate * stage_t2go_h(k)
+        rate_k = float(rate_at[k])
+        lever_k = rate_k * stage_t2go_h(k)
         for dt_bin in range(D.N_DT):
             dt_c = D.dt_bin_center_km(dt_bin)
             for v1 in range(D.N_VDEV):
@@ -313,7 +328,7 @@ def build_T_O(rate_at: np.ndarray, variant: str, verbose: bool = False):
                         vdev_sum = D.vdev_value(nv1) + D.vdev_value(nv2)
                         n_new_burns = (a1 != ACT_WAIT) + (a2 != ACT_WAIT)
                         sync_next = variant_sync_next(variant, k + 1)
-                        dist = next_dt_distribution(dt_c, vdev_sum, mean_rate, k,
+                        dist = next_dt_distribution(dt_c, vdev_sum, rate_k, k,
                                                     n_new_burns, lever_k)
                         for nb, p in enumerate(dist):
                             if p > 0.0:

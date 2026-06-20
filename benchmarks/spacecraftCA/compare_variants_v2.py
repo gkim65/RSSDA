@@ -321,6 +321,22 @@ def expected_return_from_policy(T, O, R, sdec, full_result, init_b, obs_agent_si
 PERP_KM = 0.0
 
 
+def solve_policy(variant, init_b):
+    """Solve an RS-SDA* variant (centralized/sdec) and return the SOLVED objects so a
+    consumer (e.g. rollout_v2.py) can reuse the CANONICAL policy + matrices without
+    rebuilding them. Same build path as solve_and_eval -> identical to the headline
+    numbers. Returns (T, O, R, perp, sdec, full). Not for dec (RS-MAA*, different API)."""
+    rate_at, perp, _ = TV.compute_gain_table_and_perp(PERP_KM, 0.0)
+    T, O = TV.build_T_O(rate_at, variant)
+    R = TV.build_R(perp)
+    cs = {"centralized": list(range(D.N_STAGES)),
+          "sdec": M.get_contact_stages()}[variant]
+    model = v2_model(T, O, R, init_b, cs)
+    sdec = SDecPOMDP(model=model, config=build_config_fixed())
+    full = sdec.multi_agent_astar(D.N_STAGES)
+    return T, O, R, perp, sdec, full
+
+
 def solve_and_eval(variant, init_b, rsmaa=False, rsmaa_cfg=None):
     rate_at, perp, _ = TV.compute_gain_table_and_perp(PERP_KM, 0.0)
     T, O = TV.build_T_O(rate_at, variant)
