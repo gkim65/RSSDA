@@ -114,7 +114,7 @@ def decode_action(full, step, belief_idx, oh):
 # ---------------------------------------------------------------------------
 
 def rollout_once(T, O, R, perp_km, sdec, full, init_state, init_belief_idx,
-                 obs_agent_size, rng=None, stochastic=False):
+                 obs_agent_size, rng=None, stochastic=False, trace=False):
     """Fly ONE trajectory through brahe.
 
     init_state: the true (dt_bin, vdev1, vdev2, stage=0) the trajectory STARTS in.
@@ -144,6 +144,14 @@ def rollout_once(T, O, R, perp_km, sdec, full, init_state, init_belief_idx,
     true_state = init_state
     oh = (0, 0)
     burns, total_dv, sync_count = [], 0.0, 0
+
+    _ACT = {0: "WAIT", 1: "+dV", 2: "-dV"}
+    if trace:
+        # Per-stage readout: action | matrix bin/center/vdev (state AFTER this stage's
+        # transition, so a burn's lever appears at the stage it is commanded, in phase
+        # with brahe) | brahe true dt@TCA flying from the current SC2 state | err.
+        print(f"\n  {'stg':>3} {'action':>9} {'mtx_bin':>7} {'mtx_dtc':>8} "
+              f"{'mtx_vdev':>9} {'brahe_dt':>9} {'err':>8}")
 
     for step in range(D.N_STAGES):
         joint_act, a1, a2, is_cen, c_ptr = decode_action(full, step, belief_idx, oh)
@@ -193,6 +201,16 @@ def rollout_once(T, O, R, perp_km, sdec, full, init_state, init_belief_idx,
                                      step, nb, list(oh), is_cen, c_ptr, o1, o2)
             belief_idx, oh = nb, (n0, n1)
 
+        if trace:
+            # brahe truth: dt@TCA flying from the CURRENT SC2 state (post-burn, pre-coast).
+            b_dt, _ = signed_dt_and_miss_at_tca(sc1_tca, sc2_eci, sc2_epoch)
+            ns_show = next_state if next_state != D.SINK_STATE else true_state
+            nb_, nv1_, nv2_, _ = D.index_to_state(ns_show)
+            mdtc = D.dt_bin_center_km(nb_)
+            vdev_s = f"({D.vdev_value(nv1_)},{D.vdev_value(nv2_)})"
+            print(f"  {step:>3} {_ACT[a1]+'/'+_ACT[a2]:>9} {nb_:>7} {mdtc:>8.2f} "
+                  f"{vdev_s:>9} {b_dt:>9.2f} {b_dt - mdtc:>8.2f}")
+
         # --- propagate SC2 to next stage epoch ---
         if step < D.N_STAGES - 1:
             sc2_eci = propagate_batch_to([sc2_epoch], [sc2_eci], STAGE_EPOCHS[step + 1])[0]
@@ -205,11 +223,20 @@ def rollout_once(T, O, R, perp_km, sdec, full, init_state, init_belief_idx,
     matrix_dt_km = D.dt_bin_center_km(tdt_bin)
     matrix_miss_km = D.miss_km_from_dt(matrix_dt_km, perp_km)
 
+    # TRUE terminal reward (from the ACTUAL brahe miss) vs the MATRIX's binned terminal reward
+    # (the bin center the solver optimized against). The gap = how much binning over/under-credits
+    # the landing -- biggest at the 4-5km risk cliff (bin [4,5) center -423 vs ~0 at 4.9km).
+    true_term_reward = TV.terminal_reward(brahe_dt_km, brahe_miss_km)
+    matrix_term_reward = TV.terminal_reward(matrix_dt_km, matrix_miss_km)
+    # number of agent-burns executed (each burn entry may carry 1 or 2 agent burns)
+    n_burns = sum((a1 != 0) + (a2 != 0) for (_s, a1, a2) in burns)
+
     return dict(
         brahe_miss_km=brahe_miss_km, brahe_dt_km=brahe_dt_km,
         matrix_dt_km=matrix_dt_km, matrix_miss_km=matrix_miss_km,
         dt_err_km=brahe_dt_km - matrix_dt_km,
-        burns=burns, total_dv=total_dv, sync_count=sync_count,
+        true_term_reward=true_term_reward, matrix_term_reward=matrix_term_reward,
+        burns=burns, n_burns=n_burns, total_dv=total_dv, sync_count=sync_count,
     )
 
 
@@ -231,11 +258,11 @@ def most_dangerous_support(init_b):
     return best
 
 
-def run_point(T, O, R, perp_km, sdec, full, init_b, obs_agent_size):
+def run_point(T, O, R, perp_km, sdec, full, init_b, obs_agent_size, trace=False):
     root_belief = sdec.dist_dict[int_tuple(sdec.init_beliefs)]
     seed_state = most_dangerous_support(init_b)
     r = rollout_once(T, O, R, perp_km, sdec, full, seed_state, root_belief,
-                     obs_agent_size, stochastic=False)
+                     obs_agent_size, stochastic=False, trace=trace)
     return [r]
 
 
@@ -315,10 +342,14 @@ def run_mc(T, O, R, perp_km, sdec, full, init_b, obs_agent_size, n, seed=0):
         tdt_bin = (D.index_to_state(true_state[i])[0]
                    if true_state[i] != D.SINK_STATE else D.N_DT // 2)
         mdt = D.dt_bin_center_km(tdt_bin)
+        mmiss = D.miss_km_from_dt(mdt, perp_km)
+        nb = sum((a1 != 0) + (a2 != 0) for (_s, a1, a2) in burns[i])
         results.append(dict(
             brahe_miss_km=bmiss, brahe_dt_km=bdt,
-            matrix_dt_km=mdt, matrix_miss_km=D.miss_km_from_dt(mdt, perp_km),
-            dt_err_km=bdt - mdt, burns=burns[i],
+            matrix_dt_km=mdt, matrix_miss_km=mmiss,
+            dt_err_km=bdt - mdt, burns=burns[i], n_burns=nb,
+            true_term_reward=TV.terminal_reward(bdt, bmiss),
+            matrix_term_reward=TV.terminal_reward(mdt, mmiss),
             total_dv=float(total_dv[i]), sync_count=sync_count,
         ))
     return results
@@ -341,6 +372,15 @@ def summarize(results, label, mode):
     print(f"  matrix-vs-brahe dt error: mean={(bdt-mdt).mean():8.2f}  "
           f"absmean={np.abs(bdt-mdt).mean():7.2f}  max|err|={np.abs(bdt-mdt).max():7.2f} km")
     print(f"  total dV       : mean={dv.mean():.3f} m/s   syncs={results[0]['sync_count']}")
+    # TRUE terminal reward (from actual brahe miss) vs the MATRIX's binned terminal reward the
+    # solver optimized -- the gap shows how much binning over/under-credits the landing.
+    tr = np.array([r["true_term_reward"] for r in results])
+    mr = np.array([r["matrix_term_reward"] for r in results])
+    nb = np.array([r["n_burns"] for r in results])
+    print(f"  terminal reward: true(brahe)={tr.mean():9.2f}  matrix(binned)={mr.mean():9.2f}  "
+          f"gap={tr.mean()-mr.mean():+8.2f}")
+    print(f"  burns/rollout  : mean={nb.mean():.2f}  max={nb.max()}  "
+          f"(<=2 burns: {100*np.mean(nb <= 2):.0f}% of rollouts)")
     if len(results) == 1:
         bs = ",".join(f"s{k}:({a1},{a2})" for (k, a1, a2) in results[0]["burns"])
         print(f"  burn schedule  : {bs or 'none'}")
@@ -360,6 +400,8 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--backend", default=None,
                     choices=["numerical", "keplerian", "drag"])
+    ap.add_argument("--trace", action="store_true",
+                    help="point mode: print per-stage matrix-bin/vdev vs brahe dt + err.")
     args = ap.parse_args()
 
     initialize_eop()
@@ -381,7 +423,8 @@ def main():
 
     obs_agent_size = TV.N_OBS_AGENT
     if args.mode == "point":
-        results = run_point(T, O, R, perp, sdec, full, init_b, obs_agent_size)
+        results = run_point(T, O, R, perp, sdec, full, init_b, obs_agent_size,
+                            trace=args.trace)
     else:
         results = run_mc(T, O, R, perp, sdec, full, init_b, obs_agent_size,
                          args.rollouts, seed=args.seed)

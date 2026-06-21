@@ -51,9 +51,16 @@ N_JOINT_OBS  = N_OBS_AGENT ** 2
 # a single burn cost as much as 10 off-nominal stages, biasing the policy toward NOT
 # maneuvering. Lowered to -1 (2026-06-10 cont.) so the burn/deviation/risk tradeoff is
 # balanced and the policy will actually maneuver when warranted.)
-REWARD_MANEUVER  =  -1.0   # per agent-burn
+REWARD_MANEUVER  =  -2.0   # per agent-burn (env SPACECRAFT_MAN_COST overrides for tuning)
 REWARD_DEVIATION =  -1.0   # per stage per agent off-nominal (vdev != NOM)
 REWARD_STEP      =   0.0
+# 2026-06-20d: was -1, but at -1 the policy OVER-MANEUVERS (4-burn dance, 2 m/s) because a far
+# single burn (~9km, disp ~-3) ~ties 3 extra burns. -2 collapses it to a clean 2-burn (1 m/s,
+# brahe 0% coll, lands 5.5-7.5km); -3 == -2. -2 chosen as the default. Too high (-5+) makes the
+# policy lazy (one far burn to ~9km instead of threading 4-7km). Env SPACECRAFT_MAN_COST sweeps it.
+_man_env = os.environ.get("SPACECRAFT_MAN_COST")
+if _man_env is not None:
+    REWARD_MANEUVER = float(_man_env)
 
 # ---------------------------------------------------------------------------
 # Terminal reward = TWO OPPOSING RAMPS in miss/dT space (v2 redesign).
@@ -76,7 +83,22 @@ RISK_MAX_PENALTY    = -10000.0 # penalty at miss = 0 (collision); dominates ever
 
 # --- DISPLACEMENT ramp parameters (keyed to station-keeping tube, km) ---
 DISP_TUBE_HALFWIDTH_KM = 5.0   # within this |dT|: effectively in-slot, no return owed
-DISP_COST_PER_KM       = 0.5   # return-cost slope beyond the tube (free WEIGHT knob)
+DISP_COST_PER_KM       = 0.5   # (legacy linear slope; used iff DISP_QUADRATIC_K is None)
+# Convex (quadratic) return-cost past the tube. 2026-06-19b: the linear 0.5/km ramp was
+# ~100x too gentle vs the -10000 risk floor -> overshooting past 5 km was nearly free, so
+# all 3 variants collapsed to ONE late max-lever burn (land ~+10 km), killing differentiation.
+# A convex ramp keeps the 5 km knee (cost 0 at/below 5 km, near-0 just past it) but climbs
+# steeply, so landing far past 5 km is costly -> the policy must land NEAR 5 km, which from a
+# fixed-lever late burn needs finer control / coordination -> revives the sync value.
+# cost = -DISP_QUADRATIC_K * (|dT| - tube)^2 .  None => fall back to the legacy linear ramp.
+# Physically defensible: phasing-restoration dV grows super-linearly with displacement.
+DISP_QUADRATIC_K       = 0.2   # free curvature knob (SWEEP: 0.2 mild .. 1.0 aggressive).
+                               # 0.2 = the value that revived Cen<SDec<Dec (2026-06-19b).
+# Env override for the curvature sweep (e.g. SPACECRAFT_DISP_K=0.2). "none"/"linear"
+# falls back to the legacy linear ramp. Keeps the sweep reproducible without code edits.
+_disp_k_env = os.environ.get("SPACECRAFT_DISP_K")
+if _disp_k_env is not None:
+    DISP_QUADRATIC_K = None if _disp_k_env.lower() in ("none", "linear") else float(_disp_k_env)
 
 # Collision threshold used for the collision-probability metric (unchanged).
 # (RISK_COLLISION_KM is the reward floor; the binary collision flag uses D's threshold.)
@@ -106,7 +128,9 @@ def displacement_cost(dt_km: float) -> float:
     something so the policy clears the threshold and stops (no over-mitigation).
     """
     excess = max(abs(dt_km) - DISP_TUBE_HALFWIDTH_KM, 0.0)
-    return -DISP_COST_PER_KM * excess
+    if DISP_QUADRATIC_K is not None:
+        return -DISP_QUADRATIC_K * excess * excess     # convex (super-linear) return cost
+    return -DISP_COST_PER_KM * excess                  # legacy linear ramp
 
 
 def terminal_reward(dt_km: float, miss_km: float) -> float:
@@ -231,6 +255,16 @@ def compute_gain_table_and_perp(perp_km: float = 0.0, dt0_km: float = 0.0,
     return rate_at, perp_meas, dt0_km
 
 
+def configure_dt_grid(perp_km: float = 0.0, dt0_km: float = 0.0, dv: float = None):
+    """Auto-configure the discretizer's dt bin edges from THIS conjunction's burn levers, the
+    SINGLE source of truth for the grid. Both build_init_b_danger and build_T_O call this so the
+    init belief and the matrices always agree on N_DT / state indices (no reliance on the static
+    default). Idempotent: same conjunction -> same edges. Returns the positive edges."""
+    rate_at, _, _ = compute_gain_table_and_perp(perp_km, dt0_km, dv)
+    levers = [float(rate_at[k]) * stage_t2go_h(k) for k in range(N_STAGES)]
+    return D.set_dt_edges_from_levers(levers)
+
+
 # ---------------------------------------------------------------------------
 # dt transition (deterministic core + stochastic spread)
 # ---------------------------------------------------------------------------
@@ -255,27 +289,50 @@ def step_hours(stage: int) -> float:
     return max(stage_t2go_h(stage) - stage_t2go_h(stage + 1), 0.0)
 
 
-def next_dt_distribution(dt_km: float, vdev_sum: int, mean_rate: float,
+def next_dt_distribution(dt_km: float, delta_vdev_sum: int, rate_k: float,
                          stage: int, n_new_burns: int, lever_k: float) -> np.ndarray:
     """
     Distribution over next dt bins.
 
-    vdev_sum (= vdev1+vdev2 in {-2..+2}) is a net drift RATE in units of mean_rate
-    (km/h per unit vdev). The per-step dt increment is rate * step_hours:
-        dt_next_mean = dt + vdev_sum * mean_rate * step_hours(stage)
+    TCA-FRAME JUMP transition. The dt STATE is the signed along-track offset AT TCA if
+    you coast from here -- a forward PREDICTION, not the current separation. An impulsive
+    along-track burn changes velocity permanently, so the new vdev acts all the way to
+    TCA: the eventual TCA offset jumps by the FULL remaining lever the instant the burn
+    changes vdev, and coasting (WAIT) leaves the prediction unchanged. Hence dt advances
+    by the CHANGE in vdev this step times the per-stage lever:
+
+        delta_vdev_sum = (vdev1'+vdev2') - (vdev1+vdev2)   # change in net vdev this step
+        dt_next_mean   = dt + delta_vdev_sum * lever_k      # full-lever jump; 0 on WAIT
+
+    lever_k = rate_at[k]*t2go(k) (passed in) = the dT a unit burn at stage k produces BY
+    TCA (per-stage rate, matches brahe to <0.1 km vs ~1.5 km for the mean-rate collapse).
+
+    VALIDATED (notes/scratch/diag_optionA.py, deterministic oracle vs brahe): for a
+    burn+counter (+dV@s19, -dV@s21) this composes to TCA -6.91 vs brahe -6.98 (0.07 km)
+    AND is correct mid-flight at every stage. The residual lever(19)-lever(21) IS the
+    real net drift two impulses 2 stages apart leave -- brahe agrees. (The earlier
+    "jump composes wrong" alarm (2026-06-20b) was misattributed: see 2026-06-20c.md.)
+
+    ⚠️ KNOWN CAVEAT (next-session work, 2026-06-20c): build_T_O re-reads dt from the BIN
+    CENTER each step (no float carry), and the far-field dt grid is coarse (bin 1 center
+    -31.62 spans ~[-50,-20]). A -32 km burn snaps to -31.62 then the counter composes
+    from that snapped center -- correct only because the grid happens to round favorably.
+    Validate the SOLVED policy with rollout_v2 --trace (err ~bin-width at EVERY stage)
+    before trusting composition; if it drifts, refine the far-field bins.
 
     Stochastic spread (added to dt before re-binning):
-      - process drift: PROCESS_DRIFT_SIGMA * sqrt(step_hours)
-      - execution noise: ADDITIVE, sigma = EXEC_DV_ERROR_FRAC * |lever_k| per NEW
-        burn this step. lever_k = dT a unit burn at stage k produces by TCA
-        (= mean_rate * t2go(k)). This is the brahe-measured structure (big early,
-        small late); independent burns add in quadrature -> sqrt(n_new_burns).
+      - process drift: PROCESS_DRIFT_SIGMA * sqrt(step_hours). PHYSICAL coast-leg
+        perturbation that accumulates every stage regardless of burns (TCA-offset
+        uncertainty grows toward TCA even on a pure WAIT) -- stays PER-STEP.
+      - execution noise: ADDITIVE, sigma = EXEC_DV_ERROR_FRAC * |lever_k| per NEW burn
+        this step (the burn's lever is mis-sized by the dV error); already a full-lever
+        per-burn quantity, composes with the jump; independent burns add in quadrature.
     """
     dt_step_h = step_hours(stage)
     drift_sigma = PROCESS_DRIFT_SIGMA_KM_PER_SQRT_H * np.sqrt(dt_step_h)
     exec_sigma = (EXEC_DV_ERROR_FRAC * abs(lever_k) * np.sqrt(n_new_burns)
                   if n_new_burns > 0 else 0.0)
-    dt_mean = dt_km + vdev_sum * mean_rate * dt_step_h
+    dt_mean = dt_km + delta_vdev_sum * lever_k
     counts = np.zeros(D.N_DT, dtype=np.float64)
     for i in range(TRANSITION_NOISE_N_SAMPLES):
         x = dt_mean + drift_sigma * _DRIFT_STD_NORMAL[i] + exec_sigma * _EXEC_STD_NORMAL[i]
@@ -303,6 +360,15 @@ def build_T_O(rate_at: np.ndarray, variant: str, verbose: bool = False):
     Observations: sync stages reveal shared dt_bin + both vdev; off-sync reveal
     only each agent's own vdev. Terminal stage -> sink.
     """
+    # AUTO-CONFIGURE the dt grid from THIS conjunction's burn levers BEFORE allocating T/O
+    # (T/O sizes depend on D.N_STATES_TOTAL). Fixed near anchors [1,4,5,7] + lever-faithful
+    # source edges (<50km) so a burn+counter snaps its first burn to a faithful starting bin
+    # (the coarse-tail aliasing was what made a colliding burn+counter read "safe"; 2026-06-20d).
+    # Regenerates per conjunction/horizon/dV since the levers change. Markovian: edges depend
+    # only on the (build-time) lever table, not on any trajectory.
+    levers = [float(rate_at[k]) * stage_t2go_h(k) for k in range(N_STAGES)]
+    D.set_dt_edges_from_levers(levers)
+
     # Per-stage drift rate (rate_at[k]) instead of a single mean over all stages.
     # The gain table already measures the true rate at each stage; using it makes the
     # transition stage-inhomogeneous in vdev dynamics (physically correct: a burn early
@@ -325,10 +391,16 @@ def build_T_O(rate_at: np.ndarray, variant: str, verbose: bool = False):
                             continue
                         nv1 = D.update_vdev_bin(v1, a1)
                         nv2 = D.update_vdev_bin(v2, a2)
-                        vdev_sum = D.vdev_value(nv1) + D.vdev_value(nv2)
+                        # CHANGE in net velocity offset this step (not the total): only the
+                        # change adds new drift-to-TCA; the prior vdev's lever is already
+                        # baked into the incoming dt (TCA-frame jump). vdev saturates at
+                        # +/-1, so a burn into the cap yields delta=0 (no new lever) --
+                        # the known vdev+-2 limitation (a same-dir double-burn can't add).
+                        delta_vdev_sum = ((D.vdev_value(nv1) + D.vdev_value(nv2))
+                                          - (D.vdev_value(v1) + D.vdev_value(v2)))
                         n_new_burns = (a1 != ACT_WAIT) + (a2 != ACT_WAIT)
                         sync_next = variant_sync_next(variant, k + 1)
-                        dist = next_dt_distribution(dt_c, vdev_sum, rate_k, k,
+                        dist = next_dt_distribution(dt_c, delta_vdev_sum, rate_k, k,
                                                     n_new_burns, lever_k)
                         for nb, p in enumerate(dist):
                             if p > 0.0:
@@ -430,6 +502,11 @@ def build_init_b_danger(init_miss_km, spread_km, perp_km, sign_mode="both"):
 
     Returns (init_b, flagged, effective_miss_km).
     """
+    # Configure the dt grid from THIS conjunction's burn levers FIRST, so the init belief is
+    # built on the SAME (auto-generated) grid the matrices will use -- no reliance on the static
+    # default matching, and correct for any conjunction (different perp -> different levers ->
+    # different source edges). build_T_O reconfigures identically at build time (idempotent).
+    configure_dt_grid(perp_km)
     perp_km = float(perp_km)
     init_miss_km = float(init_miss_km)
     # Back-solve the along-track center so sqrt(dt^2+perp^2)=init_miss. If perp alone
