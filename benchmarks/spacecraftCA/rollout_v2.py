@@ -66,6 +66,12 @@ from spacecraft_simulator import get_rssda_action, update_oh_rssda
 
 import compare_variants_v2 as CV
 
+# Target "safe band" the policy aims for: 4 = "never closer than 4km" lower safe edge,
+# 7 = upper edge of the displacement-cost-acceptable landing (discretizer_v2 anchors
+# 4,5,7). Outside this band = either too close (<4, risk) or wasteful overshoot (>7).
+SAFE_LO_KM = 4.0
+SAFE_HI_KM = 7.0
+
 
 # ---------------------------------------------------------------------------
 # brahe geometry helpers (SIGN-RECONCILED)
@@ -231,7 +237,9 @@ def rollout_once(T, O, R, perp_km, sdec, full, init_state, init_belief_idx,
     # number of agent-burns executed (each burn entry may carry 1 or 2 agent burns)
     n_burns = sum((a1 != 0) + (a2 != 0) for (_s, a1, a2) in burns)
 
+    init_miss_km = D.miss_km_from_dt(dt0_km, perp_km)
     return dict(
+        init_miss_km=init_miss_km,
         brahe_miss_km=brahe_miss_km, brahe_dt_km=brahe_dt_km,
         matrix_dt_km=matrix_dt_km, matrix_miss_km=matrix_miss_km,
         dt_err_km=brahe_dt_km - matrix_dt_km,
@@ -344,7 +352,10 @@ def run_mc(T, O, R, perp_km, sdec, full, init_b, obs_agent_size, n, seed=0):
         mdt = D.dt_bin_center_km(tdt_bin)
         mmiss = D.miss_km_from_dt(mdt, perp_km)
         nb = sum((a1 != 0) + (a2 != 0) for (_s, a1, a2) in burns[i])
+        init_miss_km = D.miss_km_from_dt(D.dt_bin_center_km(D.index_to_state(int(s0[i]))[0]),
+                                         perp_km)
         results.append(dict(
+            init_miss_km=init_miss_km,
             brahe_miss_km=bmiss, brahe_dt_km=bdt,
             matrix_dt_km=mdt, matrix_miss_km=mmiss,
             dt_err_km=bdt - mdt, burns=burns[i], n_burns=nb,
@@ -356,18 +367,128 @@ def run_mc(T, O, R, perp_km, sdec, full, init_b, obs_agent_size, n, seed=0):
 
 
 # ---------------------------------------------------------------------------
+# CSV persistence (re-summarize / re-plot without re-flying brahe; wandb later)
+# ---------------------------------------------------------------------------
+
+# Per-rollout scalar columns saved to CSV. `burns` (a list) is serialized as a
+# "s17:1/0;s18:0/2" string so each row stays flat.
+_CSV_COLS = ["init_miss_km", "brahe_miss_km", "brahe_dt_km", "matrix_miss_km",
+             "matrix_dt_km", "dt_err_km", "true_term_reward", "matrix_term_reward",
+             "n_burns", "total_dv", "sync_count", "burns"]
+
+
+def _burns_to_str(burns):
+    return ";".join(f"s{k}:{a1}/{a2}" for (k, a1, a2) in burns)
+
+
+def _burns_from_str(s):
+    out = []
+    for tok in str(s).split(";"):
+        if not tok:
+            continue
+        stg, acts = tok.split(":"); a1, a2 = acts.split("/")
+        out.append((int(stg[1:]), int(a1), int(a2)))
+    return out
+
+
+def save_csv(results, csv_path):
+    import csv
+    os.makedirs(os.path.dirname(os.path.abspath(csv_path)), exist_ok=True)
+    with open(csv_path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=_CSV_COLS)
+        w.writeheader()
+        for r in results:
+            row = {c: r.get(c) for c in _CSV_COLS}
+            row["burns"] = _burns_to_str(r.get("burns", []))
+            w.writerow(row)
+    print(f"  per-rollout CSV saved -> {csv_path}  ({len(results)} rows)")
+
+
+def load_csv(csv_path):
+    import csv
+    results = []
+    with open(csv_path) as f:
+        for row in csv.DictReader(f):
+            d = {}
+            for c in _CSV_COLS:
+                if c == "burns":
+                    d["burns"] = _burns_from_str(row.get("burns", ""))
+                elif c in ("n_burns", "sync_count"):
+                    d[c] = int(float(row[c]))
+                else:
+                    d[c] = float(row[c])
+            results.append(d)
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
 
-def summarize(results, label, mode):
+def _band_stats(miss):
+    """Distribution + safe-band membership for a miss-distance array."""
+    below = np.mean(miss < SAFE_LO_KM)
+    inband = np.mean((miss >= SAFE_LO_KM) & (miss <= SAFE_HI_KM))
+    above = np.mean(miss > SAFE_HI_KM)
+    return dict(mean=miss.mean(), min=miss.min(), max=miss.max(),
+                std=miss.std(), median=float(np.median(miss)),
+                below=below, inband=inband, above=above)
+
+
+def _print_band(name, s):
+    print(f"  {name:>12} miss: mean={s['mean']:7.3f} min={s['min']:7.3f} "
+          f"max={s['max']:7.3f} median={s['median']:7.3f} std={s['std']:6.3f} km")
+    print(f"  {'':>12}       <{SAFE_LO_KM:.0f}km(unsafe)={100*s['below']:5.1f}%  "
+          f"[{SAFE_LO_KM:.0f}-{SAFE_HI_KM:.0f}](in-band)={100*s['inband']:5.1f}%  "
+          f">{SAFE_HI_KM:.0f}km(overshoot)={100*s['above']:5.1f}%")
+
+
+def save_histograms(results, label, mode, fig_path):
+    """Histogram of start (init) miss + end (TCA) miss, brahe & matrix, with the
+    collision floor and the 4-7km safe band shaded."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    init = np.array([r["init_miss_km"] for r in results])
+    bmiss = np.array([r["brahe_miss_km"] for r in results])
+    mmiss = np.array([r["matrix_miss_km"] for r in results])
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.2))
+    hi = max(15.0, float(np.percentile(np.concatenate([init, bmiss, mmiss]), 99)) + 1)
+    bins = np.linspace(0, hi, 31)
+    # left: where rollouts START
+    axes[0].hist(init, bins=bins, color="#777", alpha=0.85)
+    axes[0].set_title(f"START: initial miss  (n={len(results)})")
+    # right: where they END (brahe truth vs matrix-believed)
+    axes[1].hist(bmiss, bins=bins, color="#2c7", alpha=0.7, label="brahe (truth)")
+    axes[1].hist(mmiss, bins=bins, color="#36c", alpha=0.45, label="matrix (believed)")
+    axes[1].set_title("END: TCA miss")
+    axes[1].legend()
+    for ax in axes:
+        ax.axvspan(0, D.COLLISION_THRESHOLD_KM, color="red", alpha=0.18)
+        ax.axvspan(SAFE_LO_KM, SAFE_HI_KM, color="green", alpha=0.13)
+        ax.set_xlabel("miss distance (km)"); ax.set_ylabel("rollouts")
+    fig.suptitle(f"[{label}] {mode}  rollout miss distribution "
+                 f"(red=<{D.COLLISION_THRESHOLD_KM:.0f}km collision, "
+                 f"green={SAFE_LO_KM:.0f}-{SAFE_HI_KM:.0f}km safe band)")
+    fig.tight_layout()
+    fig.savefig(fig_path, dpi=110)
+    plt.close(fig)
+    print(f"  histogram saved -> {fig_path}")
+
+
+def summarize(results, label, mode, fig_path=None):
     miss = np.array([r["brahe_miss_km"] for r in results])
+    mmiss = np.array([r["matrix_miss_km"] for r in results])
     bdt = np.array([r["brahe_dt_km"] for r in results])
     mdt = np.array([r["matrix_dt_km"] for r in results])
     dv = np.array([r["total_dv"] for r in results])
     coll = np.mean(miss < D.COLLISION_THRESHOLD_KM)
+    mcoll = np.mean(mmiss < D.COLLISION_THRESHOLD_KM)
     print(f"\n{'='*66}\n[{label}]  mode={mode}  n={len(results)}\n{'='*66}")
-    print(f"  brahe TCA miss : mean={miss.mean():8.3f}  min={miss.min():8.3f} km")
-    print(f"  brahe collisions (<{D.COLLISION_THRESHOLD_KM}km): {100*coll:.2f}%")
+    _print_band("brahe", _band_stats(miss))
+    _print_band("matrix", _band_stats(mmiss))
+    print(f"  collisions (<{D.COLLISION_THRESHOLD_KM:.0f}km): "
+          f"brahe={100*coll:.2f}%  matrix={100*mcoll:.2f}%")
     print(f"  terminal dt    : brahe mean={bdt.mean():8.2f}  matrix mean={mdt.mean():8.2f} km")
     print(f"  matrix-vs-brahe dt error: mean={(bdt-mdt).mean():8.2f}  "
           f"absmean={np.abs(bdt-mdt).mean():7.2f}  max|err|={np.abs(bdt-mdt).max():7.2f} km")
@@ -384,6 +505,8 @@ def summarize(results, label, mode):
     if len(results) == 1:
         bs = ",".join(f"s{k}:({a1},{a2})" for (k, a1, a2) in results[0]["burns"])
         print(f"  burn schedule  : {bs or 'none'}")
+    if fig_path is not None:
+        save_histograms(results, label, mode, fig_path)
 
 
 def main():
@@ -402,7 +525,32 @@ def main():
                     choices=["numerical", "keplerian", "drag"])
     ap.add_argument("--trace", action="store_true",
                     help="point mode: print per-stage matrix-bin/vdev vs brahe dt + err.")
+    ap.add_argument("--hist", type=str, default=None,
+                    help="save a start/end miss-distribution histogram PNG to this path "
+                         "(or a tag -> notes/figures/rollout_hist_<tag>_<variant>_<mode>.png).")
+    ap.add_argument("--csv", type=str, default=None,
+                    help="save per-rollout data to this path (or a tag -> "
+                         "notes/results/rollout_<tag>_<variant>_<mode>.csv). Re-loadable "
+                         "with --from-csv to re-summarize/re-plot without re-flying brahe.")
+    ap.add_argument("--from-csv", type=str, default=None,
+                    help="skip solving/rollout; load a saved per-rollout CSV and just "
+                         "re-run summarize (+ --hist). Path to a rollout_*.csv.")
     args = ap.parse_args()
+
+    def _tagged_path(val, subdir, prefix, ext):
+        if os.sep in val or val.endswith(ext):
+            return val
+        d = os.path.join(_HERE, "notes", subdir)
+        os.makedirs(d, exist_ok=True)
+        return os.path.join(d, f"{prefix}_{val}_{args.variant}_{args.mode}{ext}")
+
+    # Fast path: re-summarize / re-plot a saved CSV with no solve.
+    if args.from_csv is not None:
+        results = load_csv(args.from_csv)
+        fig_path = _tagged_path(args.hist, "figures", "rollout_hist", ".png") \
+            if args.hist is not None else None
+        summarize(results, args.variant, args.mode, fig_path=fig_path)
+        return
 
     initialize_eop()
     if args.contact_stages is not None:
@@ -428,7 +576,11 @@ def main():
     else:
         results = run_mc(T, O, R, perp, sdec, full, init_b, obs_agent_size,
                          args.rollouts, seed=args.seed)
-    summarize(results, args.variant, args.mode)
+    if args.csv is not None:
+        save_csv(results, _tagged_path(args.csv, "results", "rollout", ".csv"))
+    fig_path = _tagged_path(args.hist, "figures", "rollout_hist", ".png") \
+        if args.hist is not None else None
+    summarize(results, args.variant, args.mode, fig_path=fig_path)
 
 
 if __name__ == "__main__":
