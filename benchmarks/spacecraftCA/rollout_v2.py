@@ -116,11 +116,75 @@ def decode_action(full, step, belief_idx, oh):
 
 
 # ---------------------------------------------------------------------------
+# Policy source abstraction — the pluggable action seam.
+# ---------------------------------------------------------------------------
+# rollout_once / run_mc fly trajectories through brahe; the ONLY policy-specific parts are
+# (1) choosing the action at each node and (2) advancing the per-trajectory belief / obs-history
+# from the realized observation. A PolicySource owns both, so a heuristic baseline (e.g.
+# baselines_spacecraftCA/baseline_b1.py) can pipe its OWN policy into the SAME vectorized brahe
+# engine instead of re-implementing the rollout loop. The default source wraps the canonical
+# solved-policy decode (decode_action + update_oh_rssda) byte-for-byte, so the POMDP path is
+# unchanged. A source keeps per-trajectory state keyed by `i` (trajectory index); reset_traj
+# initializes a fresh trajectory.
+
+class PolicySource:
+    """Interface. action() picks the node action; update() advances per-trajectory belief/oh."""
+
+    def reset_traj(self, i, init_state):
+        """(Re)initialize per-trajectory state for trajectory i starting in init_state."""
+
+    def action(self, i, step, belief_i, oh_i):
+        """Return (joint_act, a1, a2, is_cen, c_ptr) for trajectory i at this node."""
+        raise NotImplementedError
+
+    def update(self, i, step, joint_act, is_cen, c_ptr, belief_i, oh_i, next_state, obs):
+        """Return (new_belief_i, new_oh_i) after the realized (next_state, obs). obs may be
+        None when the trajectory entered the sink / terminal stage (no observation)."""
+        return belief_i, oh_i
+
+    def trace_header(self):
+        """Extra column header(s) for the point-mode --trace readout (default: none)."""
+        return ""
+
+    def trace_cols(self, i):
+        """Extra column value(s) for trajectory i this stage (default: none)."""
+        return ""
+
+
+class PomdpPolicySource(PolicySource):
+    """Default source: the canonical solved RS-SDA*/SDec policy. Wraps decode_action and the
+    obs-history advance EXACTLY as the original loop did, so behavior is byte-identical."""
+
+    def __init__(self, sdec, full, obs_agent_size):
+        self.sdec = sdec
+        self.full = full
+        self.obs_agent_size = obs_agent_size
+
+    def action(self, i, step, belief_i, oh_i):
+        return decode_action(self.full, step, belief_i, oh_i)
+
+    def update(self, i, step, joint_act, is_cen, c_ptr, belief_i, oh_i, next_state, obs):
+        if obs is None:
+            return belief_i, oh_i
+        try:
+            o2b = {int(o): int(d) for o, _, d in
+                   self.sdec.get_terminal(belief_i, joint_act)}
+        except KeyError:
+            o2b = {}
+        nb = o2b.get(obs, belief_i)
+        o1 = obs % self.obs_agent_size; o2 = obs // self.obs_agent_size
+        n0, n1 = update_oh_rssda(self.full[1], self.full[4], self.full[2], self.full[5],
+                                 step, nb, list(oh_i), is_cen, c_ptr, o1, o2)
+        return nb, (n0, n1)
+
+
+# ---------------------------------------------------------------------------
 # Single closed-loop brahe trajectory
 # ---------------------------------------------------------------------------
 
 def rollout_once(T, O, R, perp_km, sdec, full, init_state, init_belief_idx,
-                 obs_agent_size, rng=None, stochastic=False, trace=False):
+                 obs_agent_size, rng=None, stochastic=False, trace=False,
+                 policy_source=None):
     """Fly ONE trajectory through brahe.
 
     init_state: the true (dt_bin, vdev1, vdev2, stage=0) the trajectory STARTS in.
@@ -130,11 +194,17 @@ def rollout_once(T, O, R, perp_km, sdec, full, init_state, init_belief_idx,
     stochastic=True : sample T (next state) and O (obs) from the matrix rows (Monte
                 Carlo). The belief/obs-history advance still uses the SAMPLED obs.
 
+    policy_source: a PolicySource. None => the canonical solved-policy source (unchanged
+                behavior). A heuristic baseline passes its own source to reuse this engine.
+
     Returns dict: brahe_miss_km, brahe_dt_km, matrix_dt_km, matrix_miss_km,
                   burns (list of (stage,a1,a2)), total_dv, sync_count.
     """
     if rng is None:
         rng = np.random.default_rng(0)
+    if policy_source is None:
+        policy_source = PomdpPolicySource(sdec, full, obs_agent_size)
+    policy_source.reset_traj(0, init_state)
 
     sc1_tca = sc1_eci_at_tca()
     dt0_bin, v1b0, v2b0, _ = D.index_to_state(init_state)
@@ -152,23 +222,18 @@ def rollout_once(T, O, R, perp_km, sdec, full, init_state, init_belief_idx,
     burns, total_dv, sync_count = [], 0.0, 0
 
     _ACT = {0: "WAIT", 1: "+dV", 2: "-dV"}
+    extra_hdr = policy_source.trace_header()
     if trace:
         # Per-stage readout: action | matrix bin/center/vdev (state AFTER this stage's
         # transition, so a burn's lever appears at the stage it is commanded, in phase
         # with brahe) | brahe true dt@TCA flying from the current SC2 state | err.
-        print(f"\n  {'stg':>3} {'action':>9} {'mtx_bin':>7} {'mtx_dtc':>8} "
+        print(f"\n  {'stg':>3} {'action':>9}{extra_hdr} {'mtx_bin':>7} {'mtx_dtc':>8} "
               f"{'mtx_vdev':>9} {'brahe_dt':>9} {'err':>8}")
 
     for step in range(D.N_STAGES):
-        joint_act, a1, a2, is_cen, c_ptr = decode_action(full, step, belief_idx, oh)
+        joint_act, a1, a2, is_cen, c_ptr = policy_source.action(0, step, belief_idx, oh)
+        extra_cols = policy_source.trace_cols(0)     # captured BEFORE the burn/obs update
 
-        # --- execute burns in brahe (SC1 fixed chief; SC2 carries both? No: each agent
-        #     burns its own craft. SC1 is the chief reference; in this reduced model both
-        #     vdev act on the RELATIVE dt, captured by burning SC2 by the NET action.
-        #     a1 (SC1 +dV) lowers relative dt the same as a2 (SC2 -dV): net along-track.
-        #     We fly the NET relative effect on SC2 = (a2 effect) - (a1 effect) is wrong;
-        #     vdev1+vdev2 BOTH add +rate. So apply a1 AND a2 as two along-track impulses
-        #     to SC2 (each unit shifts the relative drift by +rate). ---
         for act in (a1, a2):
             if act != 0:
                 sc2_eci = apply_maneuver(sc2_eci, act, dv=DV_MAGNITUDE)
@@ -188,7 +253,8 @@ def rollout_once(T, O, R, perp_km, sdec, full, init_state, init_belief_idx,
         else:
             next_state = int(np.argmax(row))
 
-        # --- matrix observation -> advance belief + obs-history (mirror the walk) ---
+        # --- matrix observation -> advance belief/obs-history via the policy source ---
+        obs = None
         if next_state != D.SINK_STATE and step < D.N_STAGES - 1:
             orow = O[joint_act, next_state, :]
             if stochastic:
@@ -197,15 +263,8 @@ def rollout_once(T, O, R, perp_km, sdec, full, init_state, init_belief_idx,
                 obs = int(nzo[rng.choice(len(nzo), p=po)])
             else:
                 obs = int(np.argmax(orow))
-            try:
-                o2b = {int(o): int(d) for o, _, d in sdec.get_terminal(belief_idx, joint_act)}
-            except KeyError:
-                o2b = {}
-            nb = o2b.get(obs, belief_idx)
-            o1 = obs % obs_agent_size; o2 = obs // obs_agent_size
-            n0, n1 = update_oh_rssda(full[1], full[4], full[2], full[5],
-                                     step, nb, list(oh), is_cen, c_ptr, o1, o2)
-            belief_idx, oh = nb, (n0, n1)
+        belief_idx, oh = policy_source.update(
+            0, step, joint_act, is_cen, c_ptr, belief_idx, oh, next_state, obs)
 
         if trace:
             # brahe truth: dt@TCA flying from the CURRENT SC2 state (post-burn, pre-coast).
@@ -214,7 +273,7 @@ def rollout_once(T, O, R, perp_km, sdec, full, init_state, init_belief_idx,
             nb_, nv1_, nv2_, _ = D.index_to_state(ns_show)
             mdtc = D.dt_bin_center_km(nb_)
             vdev_s = f"({D.vdev_value(nv1_)},{D.vdev_value(nv2_)})"
-            print(f"  {step:>3} {_ACT[a1]+'/'+_ACT[a2]:>9} {nb_:>7} {mdtc:>8.2f} "
+            print(f"  {step:>3} {_ACT[a1]+'/'+_ACT[a2]:>9}{extra_cols} {nb_:>7} {mdtc:>8.2f} "
                   f"{vdev_s:>9} {b_dt:>9.2f} {b_dt - mdtc:>8.2f}")
 
         # --- propagate SC2 to next stage epoch ---
@@ -266,21 +325,32 @@ def most_dangerous_support(init_b):
     return best
 
 
-def run_point(T, O, R, perp_km, sdec, full, init_b, obs_agent_size, trace=False):
-    root_belief = sdec.dist_dict[int_tuple(sdec.init_beliefs)]
+def run_point(T, O, R, perp_km, sdec, full, init_b, obs_agent_size, trace=False,
+              policy_source=None):
+    root_belief = (sdec.dist_dict[int_tuple(sdec.init_beliefs)] if sdec is not None else 0)
     seed_state = most_dangerous_support(init_b)
     r = rollout_once(T, O, R, perp_km, sdec, full, seed_state, root_belief,
-                     obs_agent_size, stochastic=False, trace=trace)
+                     obs_agent_size, stochastic=False, trace=trace,
+                     policy_source=policy_source)
     return [r]
 
 
-def run_mc(T, O, R, perp_km, sdec, full, init_b, obs_agent_size, n, seed=0):
+def run_mc(T, O, R, perp_km, sdec, full, init_b, obs_agent_size, n, seed=0,
+           policy_source=None):
     """VECTORIZED Monte Carlo: fly all n trajectories in LOCKSTEP so the per-stage
     brahe propagation of all n SC2 states is ONE par_propagate_to call (via
     propagate_batch_to) instead of n calls. Same physics/decode as rollout_once;
-    each trajectory keeps its own belief/obs-history/RNG branch."""
+    each trajectory keeps its own belief/obs-history/RNG branch.
+
+    policy_source: a PolicySource (action + belief/obs advance). None => the canonical
+    solved-policy source (byte-identical to the original loop). A heuristic baseline passes
+    its own source to reuse this vectorized engine instead of duplicating the rollout loop."""
+    if policy_source is None:
+        policy_source = PomdpPolicySource(sdec, full, obs_agent_size)
     rng = np.random.default_rng(seed)
-    root_belief = sdec.dist_dict[int_tuple(sdec.init_beliefs)]
+    # root_belief seeds the POMDP source's per-trajectory belief; a custom source (e.g. B1)
+    # carries its own state and ignores it, so allow sdec=None in that case.
+    root_belief = (sdec.dist_dict[int_tuple(sdec.init_beliefs)] if sdec is not None else 0)
     support = np.flatnonzero(init_b[:D.N_STATES])
     probs = init_b[support] / init_b[support].sum()
 
@@ -289,9 +359,10 @@ def run_mc(T, O, R, perp_km, sdec, full, init_b, obs_agent_size, n, seed=0):
     # --- per-trajectory state vectors ---
     s0 = support[rng.choice(len(support), size=n, p=probs)].astype(int)
     sc2 = []                       # ECI state per trajectory
-    for s in s0:
+    for i, s in enumerate(s0):
         dt0_bin = D.index_to_state(int(s))[0]
         sc2.append(root_sc2_eci(sc1_tca, D.dt_bin_center_km(dt0_bin), perp_km))
+        policy_source.reset_traj(i, int(s))
     # batch-place all at stage 0
     sc2 = propagate_batch_to([EPOCH_TCA] * n, sc2, STAGE_EPOCHS[0])
     epoch = STAGE_EPOCHS[0]
@@ -306,7 +377,7 @@ def run_mc(T, O, R, perp_km, sdec, full, init_b, obs_agent_size, n, seed=0):
     for step in range(D.N_STAGES):
         # decode + execute burns + advance belief for each trajectory (cheap, no brahe)
         for i in range(n):
-            joint_act, a1, a2, is_cen, c_ptr = decode_action(full, step, belief[i], oh[i])
+            joint_act, a1, a2, is_cen, c_ptr = policy_source.action(i, step, belief[i], oh[i])
             for act in (a1, a2):
                 if act != 0:
                     sc2[i] = apply_maneuver(sc2[i], act, dv=DV_MAGNITUDE)
@@ -319,20 +390,13 @@ def run_mc(T, O, R, perp_km, sdec, full, init_b, obs_agent_size, n, seed=0):
             row = T[joint_act, true_state[i], :]
             nz = np.flatnonzero(row > 1e-12)
             ns = int(nz[rng.choice(len(nz), p=row[nz] / row[nz].sum())])
+            obs = None
             if ns != D.SINK_STATE and step < D.N_STAGES - 1:
                 orow = O[joint_act, ns, :]
                 nzo = np.flatnonzero(orow > 1e-12)
                 obs = int(nzo[rng.choice(len(nzo), p=orow[nzo] / orow[nzo].sum())])
-                try:
-                    o2b = {int(o): int(d) for o, _, d in
-                           sdec.get_terminal(belief[i], joint_act)}
-                except KeyError:
-                    o2b = {}
-                nb = o2b.get(obs, belief[i])
-                o1 = obs % obs_agent_size; o2 = obs // obs_agent_size
-                n0, n1 = update_oh_rssda(full[1], full[4], full[2], full[5],
-                                         step, nb, list(oh[i]), is_cen, c_ptr, o1, o2)
-                belief[i], oh[i] = nb, (n0, n1)
+            belief[i], oh[i] = policy_source.update(
+                i, step, joint_act, is_cen, c_ptr, belief[i], oh[i], ns, obs)
             true_state[i] = ns if ns != D.SINK_STATE else true_state[i]
 
         # ONE batched propagation of all n SC2 states to the next stage epoch
