@@ -16,45 +16,39 @@ documented operator practice (LITERATURE_CA_THRESHOLDS.md: "clear the threshold 
 "design return maneuvers to recover the original position").
 
 STRATEGY FAMILY (per-craft, assignable independently => mixed-strategy runs fall out free):
-  THRESHOLD  (--strategy threshold, B1): burn when believed miss < own threshold, sized to
-             land in the safe band (defer to the latest stage whose single-burn lever lands
-             near the target), then return-to-nominal counter-burn once danger has passed.
-             Sub-policies: conservative(5km) / aggressive(2km) / asymmetric(SC1 defers) /
-             poc(P(collision)>1e-4, the GSOC/GISTDA go/no-go threshold).
-  SELFISH    (--strategy selfish, B1a): each operator OPTIMIZES its own burn lever/timing to
-             land ITSELF in-band given its current believed dt — an optimizer, not a fixed
-             threshold. Crucially it has NO comms, so it must MODEL the other craft:
-               blind     : assume the other does nothing (each clears alone => double push).
-               polite    : assume the other shares the load 50/50 (each does half).
-               obsaware  : re-read the SHARED dt at each contact (which ALREADY reflects the
-                           other's burns) and RE-PLAN the remaining clearance. Implicit
-                           coordination through the OBSERVATION channel, no explicit comms —
-                           the realistic middle ground, and the closest foil to the SDec POMDP.
-             KEY METRIC: how often do two selfish optimizers STILL collide / leave the band?
-             (= the cost of not coordinating, even with smart agents.)
-  FIXEDLEAD  (--strategy fixedlead, B1b): always burn at a fixed time-to-go (~CDM decision
-             window), one burn sized to clear, then return. Realistic ops cadence.
+  THRESHOLD  (--strategy threshold, B1): burn when believed miss < own threshold, DEFER to the
+             latest small-lever stage so one burn lands in the band (target-band), then a
+             return counter-burn once danger has passed. Sub-policies (--policy): conservative
+             (5km) / aggressive(2km) / asymmetric(SC1 defers) / poc(P(coll)>1e-4 GSOC/GISTDA).
+  FIRERETURN (--strategy firereturn): the OPPOSITE timing — fire IMMEDIATELY on threshold cross
+             (big early lever, over-clears far), then trim back toward the band centre. Out-and-
+             back. Tests acting-early-then-trimming vs acting-late-once.
+  SELFISH    (--strategy selfish, B1a): each operator OPTIMIZES its own burn to land ITSELF
+             in-band, with a MODEL of the other craft (--selfish-model): blind / cautious-margin
+             / cautious-early / obsaware. KEY METRIC: how often do two selfish optimizers STILL
+             collide / leave the band (the cost of not coordinating).
+  FIXEDLEAD  (--strategy fixedlead, B1b): burn at a fixed time-to-go (~CDM window), then return.
 
 Mixed strategies: --strategy-sc1 / --strategy-sc2 override the shared --strategy per craft.
 
-TWO BELIEF ESTIMATES (report BOTH + the gap):
-  pomdp : Bayes-filtered belief over the SAME T/O matrices (isolates POMDP PLANNING value).
-  raw   : threshold on the most recent OBSERVED miss, no filtering (the naive operator).
+BELIEF: a CONTINUOUS Gaussian Kalman filter over signed dt-at-TCA (belief_filter.py) — NO binning
+(baselines don't solve the POMDP). The operator thresholds the belief MEAN. The OTHER-craft
+observation fidelity is set by --other-obs {perfect, tle, frozen} (--tle-sigma sets the TLE noise);
+own state is always known via own burns. See belief_filter.py.
 
-REUSE: imports rollout_v2's harness wholesale — geometry helpers (signed_dt_and_miss_at_tca,
-root_sc2_eci), summarize (collision %, 4-7 km band, fuel, deviation, terminal reward), CSV,
-histograms — so every baseline produces rows directly comparable to the POMDP variants. Only
-the ACTION SOURCE differs (a strategy object instead of the solved-policy decode).
+REUSE: pipes a PolicySource into rollout_v2's VECTORIZED brahe engine (summarize / CSV / hist /
+band stats), so every baseline produces rows directly comparable to the POMDP variants. Only the
+ACTION SOURCE differs (a strategy object instead of the solved-policy decode).
 
 Usage:
   .venv/bin/python -u benchmarks/spacecraftCA/baselines_spacecraftCA/baseline_b1.py \
-      --strategy threshold --policy conservative --belief pomdp --mode mc --rollouts 200 \
+      --strategy threshold --policy conservative --other-obs tle --mode mc --rollouts 200 \
       --init-miss 0.5 --init-spread 1.4 --backend numerical --csv b1_cons --hist b1_cons
-  .venv/bin/python -u .../baseline_b1.py --strategy selfish --selfish-model obsaware \
+  .venv/bin/python -u .../baseline_b1.py --strategy firereturn --other-obs tle \
       --mode point --trace --init-miss 0.5 --init-spread 1.4 --backend numerical
   # mixed: SC1 fixed-lead, SC2 selfish-blind
   .venv/bin/python -u .../baseline_b1.py --strategy-sc1 fixedlead --strategy-sc2 selfish \
-      --selfish-model blind --mode mc --rollouts 200 ...
+      --selfish-model blind --other-obs tle --mode mc --rollouts 200 ...
 """
 import os, sys, argparse
 import numpy as np
@@ -82,6 +76,7 @@ from brahe import initialize_eop
 import spacecraft_discretizer_v2 as D
 import spacecraft_transition_v2 as TV
 import spacecraft_matrices as M
+import belief_filter as BF          # the SHARED discrete Bayes filter (B1 + diagnostic + POMDP-style)
 
 # Reuse rollout_v2's VECTORIZED brahe engine + harness: B1 supplies a PolicySource and the
 # engine does all rollout/propagation/CSV/hist/summary. (Geometry + the rollout loop live in
@@ -129,8 +124,11 @@ def lever_at(stage):
 # CONVERTS the obs into a believed dt/miss and what its strategy does with it.
 
 def _decode_local_dt_obs_km(obs, obs_agent_size, agent):
-    """This agent's observed dt-at-TCA (km, from the observed dt_bin centre), or None if
-    null/off-sync. The observation reflects the COMBINED effect of both craft's burns."""
+    """The COMBINED dt-at-TCA (km, from the observed dt_bin centre) carried by this agent's local
+    observation, or None if null/off-sync. NOTE: this is the JOINT outcome (both craft's burns).
+    The estimator must NOT treat it as a free self-measurement of the joint state at a GS pass —
+    see AgentEstimator. It is used only to (a) refresh OWN drift at the craft's own GS contact and
+    (b) feed the slow TLE channel for the OTHER craft."""
     o_local = obs % obs_agent_size if agent == 0 else obs // obs_agent_size
     dt_obs = o_local % TV.N_DT_OBS
     if dt_obs == TV.DT_NULL_OBS:
@@ -138,77 +136,55 @@ def _decode_local_dt_obs_km(obs, obs_agent_size, agent):
     return float(D.dt_bin_center_km(int(dt_obs)))
 
 
-def _dt_tables(perp_km):
-    centers = np.array([D.dt_bin_center_km(i) for i in range(D.N_DT)])
-    misses = np.array([D.miss_km_from_dt(c, perp_km) for c in centers])
-    return centers, misses
+# TLE cadence + refresh-stage alignment now live in belief_filter (BF.TLE_CADENCE_H,
+# BF.tle_refresh_stages) so B1 and the diagnostic share the same TLE clock.
+tle_refresh_stages = BF.tle_refresh_stages
+TLE_CADENCE_H = BF.TLE_CADENCE_H
 
 
 class AgentEstimator:
-    """Per-agent estimate of the (shared) along-track dt AT TCA. Honest operator model:
+    """Per-agent belief over the (shared) along-track dt AT TCA — a thin wrapper over the shared
+    CONTINUOUS Gaussian filter (belief_filter.BeliefFilter). The operator thresholds the belief MEAN.
+    NO binning anywhere (the baselines don't solve the POMDP, so they don't use the dt grid). See
+    belief_filter.py for the asymmetric observation model:
 
-      believed_dt = observed_baseline + own_committed_shift
-
-    where `observed_baseline` is the LAST observed dt-at-TCA (which already reflects EVERYONE'S
-    burns up to that observation), and `own_committed_shift` is the dt-at-TCA this craft has
-    added with ITS OWN burns SINCE that observation — projected with the BRAHE lever table (the
-    operator knows its own commanded maneuvers and its own dynamics; no matrix/transition model
-    needed for self-knowledge). At a contact the observation RESETS the baseline to the truth
-    (combined effect of both craft) and the own-committed-shift zeroes — so the gap an obsaware
-    operator sees between its expected dt and the observed dt is exactly the OTHER craft's
-    contribution (implicit, comms-free coordination).
-
-    belief mode:
-      pomdp : observed_baseline is the exact observed dt-at-TCA (perfect dt readout at a contact).
-      raw   : same baseline, but believed_miss reported from the binned observation centre (the
-              cruder 'naive operator' readout). The own-burn projection is identical; the gap
-              pomdp-vs-raw is purely the readout granularity of the observation.
+      own GS contact -> NO collapse (own state already known; tells you nothing about the other craft).
+      TLE epoch (~8h) -> PARTIAL collapse (noisy Kalman update on the OTHER craft, sigma grows w/ age).
+      perfect sync    -> full collapse (idealized; --other-obs perfect).
+      frozen          -> never observe the other; belief only widens (predict) + own-burn shifts.
     """
 
-    def __init__(self, mode, init_dt_km, perp_km):
-        self.mode = mode
+    def __init__(self, init_dt_mean_km, init_dt_std_km, perp_km, other_obs="tle",
+                 tle_sigma_base=BF.TLE_SIGMA_BASE_KM, tle_stages=None):
         self.perp = perp_km
-        self.centers, self.misses = _dt_tables(perp_km)
-        self.observed_baseline_km = float(init_dt_km)   # best guess before any contact
-        self.own_committed_shift_km = 0.0               # dt-at-TCA from own burns since last obs
-        self.got_obs_this_stage = False
+        self.filter = BF.BeliefFilter(init_dt_mean_km, init_dt_std_km, perp_km, other_obs=other_obs,
+                                      tle_sigma_base=tle_sigma_base, tle_stages=tle_stages)
 
     def believed_dt_km(self):
-        return self.observed_baseline_km + self.own_committed_shift_km
+        return self.filter.mean_dt_km()
 
     def believed_miss_km(self):
-        dt = self.believed_dt_km()
-        if self.mode == "raw":
-            dt = D.dt_bin_center_km(D.dt_to_bin(dt))     # crude binned readout
-        return D.miss_km_from_dt(dt, self.perp)
+        return self.filter.mean_miss_km()
 
     def collision_mass(self):
-        """P(collision) proxy for the PoC rule. Operators have a point estimate, not a full
-        distribution, so this is a soft indicator: 1 if believed miss is inside the collision
-        floor, else a small exponential tail (so PoC>1e-4 fires a touch before exact contact)."""
-        miss = self.believed_miss_km()
-        if miss <= D.COLLISION_THRESHOLD_KM:
-            return 1.0
-        # crude PoC ~ exp(-(miss-floor)^2 / 2σ^2) with σ ~ 1 km screening; > 1e-4 out to ~3.9 km
-        return float(np.exp(-0.5 * (miss - D.COLLISION_THRESHOLD_KM) ** 2))
+        """P(miss < collision floor) under the Gaussian belief (used by the PoC-style rule)."""
+        return self.filter.mass_below_miss(D.COLLISION_THRESHOLD_KM)
+
+    @property
+    def got_tle_this_stage(self):
+        """Whether the LAST observe() sharpened the belief (a TLE/perfect collapse) — the only new
+        info about the other craft. obsaware keys off this to decide when to re-plan."""
+        return self.filter.collapsed_this_stage
 
     def commit_burn(self, action, stage):
-        """Fold this craft's OWN commanded burn into its committed dt-at-TCA shift via the BRAHE
-        lever (action 1=+dV -> dt by +lever; 2=-dV -> -lever). lever_at(stage) is signed (the
-        dt a +dV burn at this stage produces by TCA)."""
-        if action == 0:
-            return
-        sign = +1.0 if action == 1 else -1.0
-        self.own_committed_shift_km += sign * lever_at(stage)
+        """OWN burn (known): shift the belief mean by the signed brahe lever at this stage."""
+        self.filter.commit_burn(action, lever_at(stage))
 
-    def observe(self, observed_dt_km):
-        """Reset the baseline to a fresh observation (the combined truth) and zero the own-shift
-        accumulator (the observation already contains it). None => off-contact, no info."""
-        self.got_obs_this_stage = (observed_dt_km is not None)
-        if observed_dt_km is None:
-            return
-        self.observed_baseline_km = float(observed_dt_km)
-        self.own_committed_shift_km = 0.0
+    def observe(self, combined_dt_km, stage):
+        """Predict (coast widening) then Kalman-condition on this stage's obs. combined_dt_km = the
+        COMBINED dt from a contact obs, or None off-contact."""
+        self.filter.predict(stage)
+        self.filter.observe(stage, combined_dt_km)
 
 
 # ---------------------------------------------------------------------------
@@ -311,6 +287,34 @@ class ThresholdStrategy(OperatorStrategy):
         return stage >= fire_stage
 
 
+class FireReturnStrategy(OperatorStrategy):
+    """B1 'fire-now then trim': the OPPOSITE timing philosophy to ThresholdStrategy. Fires the
+    avoidance burn IMMEDIATELY when believed miss crosses the threshold (big early lever -> over-
+    clears far out), then a RETURN burn that trims back only as far as needed to land near the band
+    centre (clear the threshold and stop, don't over-displace). Out-and-back. Contrast with target-
+    band (one deferred burn). Tests whether acting EARLY-then-trimming beats acting LATE-once."""
+
+    def __init__(self, agent, threshold_km=5.0):
+        super().__init__(agent)
+        self.threshold_km = threshold_km
+
+    def want_avoidance_now(self, stage, est):
+        # fire the moment the belief says we're inside the act line (no deferral)
+        return est.believed_miss_km() < self.threshold_km
+
+    def want_return_now(self, stage, est):
+        """Trim back toward the band: fire the counter only if it brings |dt| CLOSER to the band
+        centre while staying clear of the 4 km floor. (Overrides the base full-counter return.)"""
+        if not self.avoided or self.returned or stage >= D.N_STAGES - 1:
+            return False
+        dt = est.believed_dt_km()
+        ret_dir = 1 if dt > 0 else 2                    # opposite of how we pushed
+        rsign = +1.0 if ret_dir == 1 else -1.0
+        after = dt + rsign * lever_at(stage)
+        return abs(after) >= SAFE_LO_KM and \
+            abs(abs(after) - TARGET_MISS_KM) < abs(abs(dt) - TARGET_MISS_KM)
+
+
 class FixedLeadStrategy(OperatorStrategy):
     """B1b: burn ONCE at a fixed time-to-go (~CDM decision window), sized by the target-band
     rule, regardless of threshold — then return. Realistic ops cadence (act on schedule)."""
@@ -352,10 +356,12 @@ class SelfishOptimizerStrategy(OperatorStrategy):
       cautious-margin: other MIGHT not move -> overcompensate on DISTANCE (aim past the band).
       cautious-early : other MIGHT not move -> overcompensate on TIMING (fire earlier, bigger
                        lever). Both cautious flavours: two of them -> overshoot (uncoordinated).
-      obsaware       : re-read the SHARED dt each contact (already reflects the other's burns)
-                       and re-plan the REMAINING clearance from the observed dt; back off if a
-                       fresh obs shows the pass already cleared. Implicit coordination via the
-                       observation channel, no explicit comms — the closest foil to SDec POMDP.
+      obsaware       : re-plan the REMAINING clearance whenever a TLE refresh updates the other
+                       craft's estimate (the only honest channel for the other craft, ~8h cadence);
+                       back off if the updated estimate shows the pass already cleared. Implicit,
+                       SLOW coordination via the TLE channel only — NOT a free per-pass readout.
+                       (Under --other-obs frozen there is no TLE channel, so obsaware degenerates
+                       to a one-shot blind-style plan off the screening nominal.)
     """
 
     def __init__(self, agent, other_model="obsaware"):
@@ -377,12 +383,12 @@ class SelfishOptimizerStrategy(OperatorStrategy):
         if est.believed_miss_km() >= SAFE_LO_KM:
             return False                                 # already clear of the band floor
         if self.other_model == "obsaware":
-            # Re-plan only on a FRESH observation (can't tell what the other did otherwise);
-            # but if we're running out of small-lever stages, fire anyway.
+            # The ONLY new info about the other craft is a TLE refresh (got_tle_this_stage); a GS
+            # pass alone tells the operator nothing new about the other craft under the honest obs
+            # model. So hold until a TLE epoch updates the other estimate, unless we've reached the
+            # small-lever fire window (then commit with whatever we know — can't wait forever).
             fire_stage, _ = self._plan(est)
-            # hold between contacts (can't tell what the other did without a fresh obs),
-            # unless we're already at/past the small-lever fire window (then commit).
-            if not est.got_obs_this_stage and stage > 0 and stage < fire_stage:
+            if not est.got_tle_this_stage and stage > 0 and stage < fire_stage:
                 return False
             return stage >= fire_stage
         fire_stage, _ = self._plan(est)
@@ -400,6 +406,8 @@ def make_strategy(name, agent, policy=None, selfish_model="obsaware"):
         return ThresholdStrategy(agent, threshold_km=thr_map[policy])
     if name == "fixedlead":
         return FixedLeadStrategy(agent)
+    if name == "firereturn":
+        return FireReturnStrategy(agent)
     if name == "selfish":
         return SelfishOptimizerStrategy(agent, other_model=selfish_model)
     raise ValueError(f"unknown strategy {name}")
@@ -417,20 +425,6 @@ def build_model(variant, perp_km):
     return T, O, R, perp_meas
 
 
-def init_dt_km_from_b(init_b):
-    """The operators' prior dt-at-TCA = the |dt| EXPECTATION over the init belief's stage-0
-    support (a CDM-style nominal estimate). Magnitude only (the spread is symmetric in sign;
-    the operator's avoidance direction is resolved by clear_direction at burn time)."""
-    num = 0.0
-    den = 0.0
-    for s in np.flatnonzero(init_b[:D.N_STATES]):
-        dt_bin, _, _, stage = D.index_to_state(int(s))
-        if stage == 0:
-            num += init_b[s] * abs(D.dt_bin_center_km(dt_bin))
-            den += init_b[s]
-    return (num / den) if den > 0 else 0.0
-
-
 # ---------------------------------------------------------------------------
 # B1 policy source — plugs the operator heuristic into rollout_v2's VECTORIZED brahe engine.
 # ---------------------------------------------------------------------------
@@ -445,22 +439,28 @@ def init_dt_km_from_b(init_b):
 class B1PolicySource(RV.PolicySource):
     """Per-craft operator heuristic as a rollout_v2 PolicySource (see module docstring)."""
 
-    def __init__(self, init_dt_km, perp_km, obs_agent_size, strat_names, policy,
-                 selfish_model, belief_mode):
-        self.init_dt_km = init_dt_km
+    def __init__(self, init_dt_mean, init_dt_std, perp_km, obs_agent_size, strat_names, policy,
+                 selfish_model, other_obs="tle", tle_sigma_base=BF.TLE_SIGMA_BASE_KM):
+        self.init_dt_mean = init_dt_mean      # prior MEAN signed dt (CDM nominal) for the Gaussian filter
+        self.init_dt_std = init_dt_std        # prior STD (km) — the operator's initial uncertainty
         self.perp_km = perp_km
         self.obs_agent_size = obs_agent_size
         self.strat_names = strat_names
         self.policy = policy
         self.selfish_model = selfish_model
-        self.belief_mode = belief_mode
+        self.other_obs = other_obs
+        self.tle_sigma_base = tle_sigma_base
+        self.tle_stages = tle_refresh_stages()    # build-time TLE epochs aligned to the stage grid
         self._est = {}        # traj i -> [AgentEstimator x2]
         self._strat = {}      # traj i -> [OperatorStrategy x2]
         self._last_miss = {}  # traj i -> (b1_miss, b2_miss) captured at action() for the trace
 
     def reset_traj(self, i, init_state):
-        # operators' prior dt = the conjunction's nominal dt-at-TCA (CDM-style); contacts refine.
-        self._est[i] = [AgentEstimator(self.belief_mode, self.init_dt_km, self.perp_km)
+        # operators' prior = a Gaussian about the conjunction's nominal dt (CDM-style); the continuous
+        # filter then refines it per the --other-obs model (own contacts no-collapse, TLE partial).
+        self._est[i] = [AgentEstimator(self.init_dt_mean, self.init_dt_std, self.perp_km,
+                                       other_obs=self.other_obs, tle_sigma_base=self.tle_sigma_base,
+                                       tle_stages=self.tle_stages)
                         for _ in range(N_AGENT)]
         self._strat[i] = [make_strategy(self.strat_names[a], a, policy=self.policy,
                                         selfish_model=self.selfish_model)
@@ -482,10 +482,12 @@ class B1PolicySource(RV.PolicySource):
         return joint_act, a1, a2, False, -1
 
     def update(self, i, step, joint_act, is_cen, c_ptr, belief_i, oh_i, next_state, obs):
-        if obs is not None:
-            for a in range(N_AGENT):
-                self._est[i][a].observe(
-                    _decode_local_dt_obs_km(obs, self.obs_agent_size, a))
+        # call observe EVERY stage (even off-contact: obs=None) so the per-stage obs/TLE flags
+        # reset; the estimator decides whether there is anything to refresh.
+        for a in range(N_AGENT):
+            combined = (_decode_local_dt_obs_km(obs, self.obs_agent_size, a)
+                        if obs is not None else None)
+            self._est[i][a].observe(combined, step)
         return belief_i, oh_i          # POMDP belief/oh unused by B1; pass through untouched
 
     def trace_header(self):
@@ -498,18 +500,27 @@ class B1PolicySource(RV.PolicySource):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--strategy", choices=["threshold", "selfish", "fixedlead"],
+    ap.add_argument("--strategy", choices=["threshold", "selfish", "fixedlead", "firereturn"],
                     default="threshold", help="shared per-craft strategy (unless overridden).")
-    ap.add_argument("--strategy-sc1", choices=["threshold", "selfish", "fixedlead"],
+    ap.add_argument("--strategy-sc1", choices=["threshold", "selfish", "fixedlead", "firereturn"],
                     default=None, help="override strategy for SC1 (mixed-strategy runs).")
-    ap.add_argument("--strategy-sc2", choices=["threshold", "selfish", "fixedlead"],
+    ap.add_argument("--strategy-sc2", choices=["threshold", "selfish", "fixedlead", "firereturn"],
                     default=None, help="override strategy for SC2 (mixed-strategy runs).")
     ap.add_argument("--policy", choices=["conservative", "aggressive", "asymmetric", "poc"],
                     default="conservative", help="threshold strategy's sub-policy.")
     ap.add_argument("--selfish-model",
                     choices=["blind", "cautious-margin", "cautious-early", "obsaware"],
                     default="obsaware", help="selfish strategy's model of the OTHER craft.")
-    ap.add_argument("--belief", choices=["pomdp", "raw"], default="pomdp")
+    ap.add_argument("--other-obs", choices=["perfect", "tle", "frozen"], default="tle",
+                    help="OTHER-craft observation model (the decentralized fidelity axis). "
+                         "perfect=contact reveals the combined dt exactly (belief collapses to a "
+                         "point; idealized). tle=other craft refreshes on a slow ~8h TLE clock with "
+                         "NOISY along-track sigma (realistic, asymmetric self-vs-other). frozen=other "
+                         "craft NEVER refreshes (strictest self-knowledge-only floor). Own state is "
+                         "always tracked exactly via own burns. See belief_filter.py.")
+    ap.add_argument("--tle-sigma", type=float, default=BF.TLE_SIGMA_BASE_KM,
+                    help="base TLE along-track sigma (km) for the OTHER craft under --other-obs tle; "
+                         "grows with fix age toward ~5 km (aged-TLE literature). Sweepable.")
     ap.add_argument("--variant", choices=["centralized", "sdec", "dec"], default="sdec",
                     help="controls only the OBS model (which stages feed shared dt); no solver.")
     ap.add_argument("--mode", choices=["point", "mc"], default="point")
@@ -534,7 +545,8 @@ def main():
         strat_tag += f"-{args.selfish_model}"
     if "threshold" in strat_names:
         strat_tag += f"-{args.policy}"
-    label = f"B1[{strat_tag}]-{args.belief}"
+    strat_tag += f"-{args.other_obs}"
+    label = f"B1[{strat_tag}]"
 
     def _tagged_path(val, subdir, prefix, ext):
         if os.sep in val or val.endswith(ext):
@@ -542,7 +554,7 @@ def main():
         d = os.path.join(_SCA, "notes", subdir)
         os.makedirs(d, exist_ok=True)
         return os.path.join(
-            d, f"{prefix}_{val}_{strat_tag}_{args.belief}_{args.variant}_{args.mode}{ext}")
+            d, f"{prefix}_{val}_{strat_tag}_{args.variant}_{args.mode}{ext}")
 
     if args.from_csv is not None:
         results = RV.load_csv(args.from_csv)
@@ -558,8 +570,7 @@ def main():
     RV.CV.PERP_KM = args.perp
     print(f"  backend={M._SG.PROPAGATOR_BACKEND}  N_STAGES={D.N_STAGES}  "
           f"contacts={M.get_contact_stages()}")
-    print(f"  strategy: SC1={s1} SC2={s2}  policy={args.policy} selfish_model={args.selfish_model}"
-          f"  belief={args.belief}")
+    print(f"  strategy: SC1={s1} SC2={s2}  policy={args.policy} selfish_model={args.selfish_model}")
 
     init_b, flagged, eff_miss = TV.build_init_b_danger(
         args.init_miss, args.init_spread, args.perp, sign_mode="both")
@@ -567,17 +578,21 @@ def main():
           f"-> eff_miss={eff_miss:.3f} km  flagged={flagged}")
 
     T, O, R, perp = build_model(args.variant, args.perp)
-    init_dt_km = init_dt_km_from_b(init_b)
+    # continuous-Gaussian prior for the operators' filter (no binning): mean = nominal signed dt,
+    # std = the screening spread. (init_b is still built for the brahe seed-state sampling in run_mc.)
+    init_dt_mean, init_dt_std = BF.prior_from_init(args.init_miss, args.init_spread, args.perp)
     obs_agent_size = TV.N_OBS_AGENT
-    print(f"  built T/O/R [{args.variant}]  perp_meas={perp:.3f}  target_miss={TARGET_MISS_KM} km"
-          f"  init_dt={init_dt_km:.3f} km")
+    print(f"  built T/O/R [{args.variant}]  perp_meas={perp:.3f}  target_miss={TARGET_MISS_KM} km")
+    print(f"  prior dt N({init_dt_mean:.2f},{init_dt_std:.2f})  other-obs={args.other_obs}  "
+          f"tle-sigma={args.tle_sigma}  TLE@{tle_refresh_stages()} (every {TLE_CADENCE_H:.0f}h)")
 
     # The heuristic is piped into rollout_v2's VECTORIZED brahe engine via a PolicySource;
     # B1 does not run its own rollout loop. sdec/full are unused by the source (operators have
     # no POMDP belief) -> pass None. A fresh source per call resets per-trajectory estimators.
     def _source():
-        return B1PolicySource(init_dt_km, perp, obs_agent_size, strat_names,
-                              args.policy, args.selfish_model, args.belief)
+        return B1PolicySource(init_dt_mean, init_dt_std, perp, obs_agent_size, strat_names,
+                              args.policy, args.selfish_model,
+                              other_obs=args.other_obs, tle_sigma_base=args.tle_sigma)
 
     if args.mode == "point":
         results = RV.run_point(T, O, R, perp, None, None, init_b, obs_agent_size,
