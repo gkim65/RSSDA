@@ -1,0 +1,30 @@
+# @package _global_
+# preset/verify — the MACHINERY-VERIFICATION run (the regression anchor). Full-res default
+# grid + the HEAD-ON REFERENCE conjunction + the 0.5/1.4 dangerous belief. Reproduces:
+#   Centralized = SDec = -7.8300 return, 0.0000 collision (identical Cen/SDec),
+#   burns s17:1.00 s18:0.99; maneuver=-4.0 deviation=-1.02 risk=0.0 displace=-2.81.
+# If these numbers move, a global got missed. ~6 min for this 2-variant solve.
+#   python main.py +preset=verify
+
+# head-on REFERENCE conjunction, orbit pair pinned EXPLICITLY (KOE deg [a,e,i,RAAN,omega,M];
+# a in metres). SC1 = 550 km / i55 chief; SC2 = the rtn head-on placement (perp=0, miss=0,
+# v_rel 15 m/s) the model's reference scenario uses. Equivalent to conjunction.sc1_oe/sc2_oe
+# = null/null, but spelled out so the anchor is self-documenting and orbit-first like a real run.
+conjunction:
+  sc1_oe: [6928136.3, 0.001, 55.0, 20.0, 0.0, 0.0]
+  sc2_oe: [6900842.263473897, 0.002951219495829729, 55.0, 20.0, 180.0, 180.0]
+grid:
+  propagator: numerical
+  hour_grid_h: null            # full-res default ~2h cadence (N_STAGES=25)
+  merge_threshold_h: 0.25
+reward:
+  man_cost: -2.0
+  disp_k: 0.2
+belief:
+  init_miss: 0.5
+  init_spread: 1.4
+  perp: 0.0
+solve:
+  variants: [centralized, sdec]
+run:
+  tag: config_verify

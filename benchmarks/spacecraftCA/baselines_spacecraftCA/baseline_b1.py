@@ -63,13 +63,10 @@ _ROOT = os.path.dirname(_BENCH)
 for p in (_ROOT, _BENCH, _SCA, _HERE):
     sys.path.insert(0, p)
 
-# --backend must be honored BEFORE the model modules import (stage grid + N_STAGES are
-# computed at import time from the backend). Pre-scan argv, same as rollout_v2 / CV.
-for _i, _a in enumerate(sys.argv):
-    if _a == "--backend" and _i + 1 < len(sys.argv):
-        os.environ["SPACECRAFT_PROPAGATOR"] = sys.argv[_i + 1].lower()
-    elif _a.startswith("--backend="):
-        os.environ["SPACECRAFT_PROPAGATOR"] = _a.split("=", 1)[1].lower()
+# The scenario MUST be applied BEFORE the model modules import (stage grid + N_STAGES derive
+# from it). Same config-first bootstrap as rollout_v2 / compare_variants_v2 — NO env vars.
+from scenario_config import _cli_bootstrap_scenario
+_SCENARIO = _cli_bootstrap_scenario(sys.argv)
 
 from brahe import initialize_eop
 
@@ -500,6 +497,14 @@ class B1PolicySource(RV.PolicySource):
 
 def main():
     ap = argparse.ArgumentParser()
+    # scenario knobs already applied pre-import by _cli_bootstrap_scenario; declared so argparse
+    # accepts them (the config surface; values consumed before model import).
+    ap.add_argument("--scenario-config", default=None,
+                    help="YAML scenario config (the ONE config surface). NO env vars.")
+    ap.add_argument("--man-cost", type=float, default=None)
+    ap.add_argument("--disp-k", default=None)
+    ap.add_argument("--hour-grid", default=None)
+    ap.add_argument("--merge-threshold", type=float, default=None)
     ap.add_argument("--strategy", choices=["threshold", "selfish", "fixedlead", "firereturn"],
                     default="threshold", help="shared per-craft strategy (unless overridden).")
     ap.add_argument("--strategy-sc1", choices=["threshold", "selfish", "fixedlead", "firereturn"],

@@ -41,9 +41,9 @@ D = AngleFormat.DEGREES
 #   "keplerian" : closed-form two-body KeplerianPropagator (fastest over long horizons)
 #   "drag"      : NumericalOrbitPropagator + leo_default() (J2+drag+SRP+third-body) — use
 #                 for EXPERIMENT runs. Slower; needs space weather.
-# Override at runtime (no code edit) via env SPACECRAFT_PROPAGATOR, or compare_variants_v2
-# --backend. Default = two-body for quick tests; set drag explicitly for experiments.
-PROPAGATOR_BACKEND = os.environ.get("SPACECRAFT_PROPAGATOR", "numerical").lower()
+# Set via scenario_config.build_scenario (cfg.grid.propagator). Default = two-body for quick
+# tests; set drag explicitly (in config) for experiments. NO env var — config is the surface.
+PROPAGATOR_BACKEND = "numerical"
 # Drag-backend smallsat params [mass(kg), drag_area(m^2), Cd, srp_area(m^2), Cr].
 DRAG_PARAMS = np.array([150.0, 1.0, 2.2, 1.0, 1.3])
 
@@ -84,6 +84,12 @@ V_REL_MS = 15.0  # along-track closing speed at TCA (m/s). Canonical here; matri
 # Decision cadence + merge threshold
 # ---------------------------------------------------------------------------
 # Regular ~2h decision cadence (hours before TCA). Contacts merge into / extend this.
+# COARSENING KNOB (speed lever for quick verification runs): set the base cadence via the
+# config (cfg.grid.hour_grid_h, comma/list of hours-before-TCA, descending). A coarser grid
+# (e.g. [24,20,16,12,8,4] = ~4h spacing) cuts the base stage count; combined with a larger
+# merge_threshold_h (so contacts collapse onto base stages instead of spawning new ones) this
+# drops N_STAGES a lot -> fewer states -> faster solve, at the cost of decision granularity.
+# UNSET (None in config) => the default ~2h grid (zero change to production runs).
 _HOUR_GRID_H = [24, 22, 20, 18, 16, 14, 12, 10, 4, 2]
 
 # A computed contact within this many hours of an existing stage MERGES onto it
@@ -91,8 +97,7 @@ _HOUR_GRID_H = [24, 22, 20, 18, 16, 14, 12, 10, 4, 2]
 #   - 0.25h (default): keeps more distinct contacts (spread6 -> 25 stages / 18 contacts).
 #   - 0.5h           : coarser; reproduces the historical frozen 16-stage / 6-contact
 #                      grid EXACTLY for the single-station gate (validation reference).
-# Override at runtime without editing code via env SPACECRAFT_MERGE_THRESHOLD_H (below).
-# See notes/scratch/proto_contact_stages.py for the threshold sweep.
+# Set via config (cfg.grid.merge_threshold_h). See notes/scratch/proto_contact_stages.py.
 MERGE_THRESHOLD_H = 0.25
 
 GS_MIN_ELEVATION_DEG = 10.0  # standard LEO mask (NASA SoA / arXiv:2410.16282)
@@ -297,16 +302,62 @@ def compute_stage_grid(sc1_oe=None, sc2_oe=None, epoch_tca=None, hour_grid_h=Non
 
 
 # ---------------------------------------------------------------------------
-# Module-level grid (the default reference scenario). Computed once at import.
-# Override knobs via env for timing experiments without editing code:
-#   SPACECRAFT_MERGE_THRESHOLD_H   (e.g. 0.25)
+# Config-driven setters for the grid knobs (replace the old env-var reads).
+# scenario_config.build_scenario calls these before recomputing the grid. NO env vars.
 # ---------------------------------------------------------------------------
-_env_thr = os.environ.get("SPACECRAFT_MERGE_THRESHOLD_H")
-if _env_thr:
-    MERGE_THRESHOLD_H = float(_env_thr)
+def set_hour_grid(hour_grid_h):
+    """Set the base decision-cadence hour grid (descending hours-before-TCA). None => keep the
+    module default ~2h cadence. Call rebuild_grid() afterwards (build_scenario does)."""
+    global _HOUR_GRID_H
+    if hour_grid_h is not None:
+        _HOUR_GRID_H = [float(x) for x in hour_grid_h]
+    return _HOUR_GRID_H
 
+
+def set_merge_threshold(merge_threshold_h):
+    """Set the contact-merge threshold (hours). None => keep the module default."""
+    global MERGE_THRESHOLD_H
+    if merge_threshold_h is not None:
+        MERGE_THRESHOLD_H = float(merge_threshold_h)
+    return MERGE_THRESHOLD_H
+
+
+# ---------------------------------------------------------------------------
+# Module-level grid. Computed once at import from the DEFAULT reference scenario so a bare
+# `import spacecraft_stage_grid` (tools, REPL) still has a valid grid. The config path
+# (build_scenario -> rebuild_grid) RECOMPUTES this in place for the run's actual conjunction
+# / cadence BEFORE any model module imports — replacing the old SPACECRAFT_CONJ_GRID
+# subprocess hook with a true in-process parameter handoff.
+# ---------------------------------------------------------------------------
+def rebuild_grid(sc1_oe=None, sc2_oe=None, hour_grid_h=None, merge_threshold_h=None,
+                 sync_rule="later"):
+    """Recompute N_STAGES / STAGE_T_BEFORE_TCA_SEC / STAGE_EPOCHS / CONTACT_STAGES IN PLACE for
+    the given conjunction orbit pair + cadence, mutating the module globals so existing
+    references (discretizer_v2 / transition_v2 / matrices) see the new grid. None orbit args =>
+    the default reference scenario; None cadence args => the current module hour grid / merge
+    threshold (set them first via set_hour_grid / set_merge_threshold). This IS the keystone:
+    every grid global is reassigned here, so build_scenario need only call this once up front.
+
+    Note N_STAGES is reassigned as a NEW module-global int; downstream modules that captured it
+    by value at import (discretizer_v2 `from ... import N_STAGES`) must re-read it AFTER this
+    runs — which is why build_scenario runs before any model import (import-order discipline)."""
+    if hour_grid_h is not None:
+        set_hour_grid(hour_grid_h)
+    if merge_threshold_h is not None:
+        set_merge_threshold(merge_threshold_h)
+    global N_STAGES, STAGE_T_BEFORE_TCA_SEC, STAGE_EPOCHS, _ALL_TIMES_H
+    all_times, contact_idx = compute_stage_grid(sc1_oe=sc1_oe, sc2_oe=sc2_oe,
+                                                sync_rule=sync_rule)
+    _ALL_TIMES_H = all_times
+    N_STAGES = len(all_times)
+    STAGE_T_BEFORE_TCA_SEC = [h * 3600.0 for h in all_times]
+    STAGE_EPOCHS = [EPOCH_TCA - dt for dt in STAGE_T_BEFORE_TCA_SEC]
+    set_contact_stages(contact_idx)
+    return all_times, get_contact_stages()
+
+
+# initial import-time grid (default reference scenario)
 _ALL_TIMES_H, _CONTACT_STAGES_INIT = compute_stage_grid()
-
 N_STAGES = len(_ALL_TIMES_H)
 STAGE_T_BEFORE_TCA_SEC = [h * 3600.0 for h in _ALL_TIMES_H]
 STAGE_EPOCHS = [EPOCH_TCA - dt for dt in STAGE_T_BEFORE_TCA_SEC]

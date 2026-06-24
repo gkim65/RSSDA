@@ -1,0 +1,9 @@
+# @package _global_
+# preset/coarse — SPEED PRESET for quick machinery-verification runs. ~4h base cadence + a
+# 2h contact-merge threshold => N_STAGES ~6 (states 4726 -> ~1135, solve ~seconds vs ~6min
+# full). NOT for production headline numbers (coarse grid burns differently). Replaces the
+# old --coarse env preset in sweep_driver.
+#   python main.py +preset=coarse
+grid:
+  hour_grid_h: [24, 20, 16, 12, 8, 4]
+  merge_threshold_h: 2.0

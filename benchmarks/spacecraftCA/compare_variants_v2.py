@@ -28,14 +28,15 @@ _BENCHMARKS = os.path.dirname(_HERE)
 _ROOT = os.path.dirname(_BENCHMARKS)
 sys.path.insert(0, _ROOT); sys.path.insert(0, _BENCHMARKS); sys.path.insert(0, _HERE)
 
-# --backend must be honored BEFORE the model modules import, because the stage grid
-# (and the discretizers' N_STAGES / N_STATES) are computed at IMPORT time from the
-# propagator backend. Pre-scan argv and set the env var the grid reads at import.
-for _i, _a in enumerate(sys.argv):
-    if _a == "--backend" and _i + 1 < len(sys.argv):
-        os.environ["SPACECRAFT_PROPAGATOR"] = sys.argv[_i + 1].lower()
-    elif _a.startswith("--backend="):
-        os.environ["SPACECRAFT_PROPAGATOR"] = _a.split("=", 1)[1].lower()
+# The scenario MUST be applied BEFORE the model modules import, because the stage grid
+# (and the discretizers' N_STAGES / N_STATES) are derived from it and some downstream imports
+# capture grid values by value (import-order discipline). _bootstrap_scenario() pre-scans
+# argv (and --scenario-config) into a Scenario, calls build_scenario, and returns it; the
+# model modules below then import against the already-populated grid globals. NO env vars.
+from scenario_config import (
+    Scenario, build_scenario, build_reward, scenario_from_cfg, _cli_bootstrap_scenario,
+)
+_SCENARIO = _cli_bootstrap_scenario(sys.argv)
 
 from brahe import initialize_eop
 from RSSDA import SDecPOMDP, SDecPOMDPModel, int_tuple
@@ -407,6 +408,21 @@ def plot_reward_parts(parts_rows, fig_dir, tag):
 
 def main():
     ap = argparse.ArgumentParser()
+    # Scenario knobs already applied pre-import by _cli_bootstrap_scenario; declared here so
+    # argparse accepts them (the config surface; values were consumed before model import).
+    ap.add_argument("--scenario-config", default=None,
+                    help="YAML config supplying scenario knobs (the ONE config surface; "
+                         "explicit flags override it). NO env vars.")
+    ap.add_argument("--man-cost", type=float, default=None,
+                    help="per agent-burn reward (cfg.reward.man_cost; default -2.0).")
+    ap.add_argument("--disp-k", default=None,
+                    help="convex displacement curvature (cfg.reward.disp_k; "
+                         "'none'/'linear' => legacy linear ramp).")
+    ap.add_argument("--hour-grid", default=None,
+                    help="base decision cadence, comma hours-before-TCA desc "
+                         "(cfg.grid.hour_grid_h; default ~2h).")
+    ap.add_argument("--merge-threshold", type=float, default=None,
+                    help="contact-merge threshold h (cfg.grid.merge_threshold_h; default 0.25).")
     ap.add_argument("--init-miss", type=float, default=0.0,
                     help="TOTAL initial miss (km), perp-aware DANGER dial (default 0 = "
                          "collision course). dt center is back-solved so "
@@ -552,6 +568,11 @@ def main():
         p4 = plot_action_schedule(action_rows, args.fig_dir, tag)
         for p in (p1, p2, p3, p4):
             print(f"  wrote figure -> {p}")
+    # Return the in-memory rows so a config runner (main.py) can log them to wandb without
+    # re-reading the CSV. The CSV stays the source of truth; this is just the convenience seam.
+    return {"summary": summary_rows, "burn": burn_rows,
+            "reward_parts": parts_rows, "action": action_rows,
+            "n_stages": D.N_STAGES, "contact_stages": M.get_contact_stages()}
 
 
 if __name__ == "__main__":

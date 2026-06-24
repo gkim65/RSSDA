@@ -51,8 +51,19 @@ benchmarks/spacecraftCA/notes/figures/*
 !benchmarks/spacecraftCA/notes/figures/burn_timing_refined_drift_main_sdec_ti1.png
 !benchmarks/spacecraftCA/notes/figures/action_schedule_refined_drift_main_sdec_ti1.png
 
+# Private working notes — session logs and todo (never share to upstream)
+benchmarks/spacecraftCA/notes/session-log/
+benchmarks/spacecraftCA/notes/todo.md
+
 # Generated spacecraft matrix caches
 benchmarks/spacecraftCA/spacecraft_matrices_cache_*.npz
+
+# Hydra / wandb run artifacts (config-first surface) — never commit run outputs
+outputs/
+multirun/
+benchmarks/spacecraftCA/outputs/
+benchmarks/spacecraftCA/multirun/
+wandb/
 
 # Local binary/reference material
 /literature/

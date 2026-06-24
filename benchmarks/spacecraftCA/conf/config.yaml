@@ -1,0 +1,98 @@
+# =============================================================================
+# config.yaml — the ONE config-first surface for the spacecraft-CA SDec-POMDP.
+#
+#   cfg  ->  build_scenario(cfg)  ->  solve(scenario)
+#
+# This is the ONLY file you normally edit. Everything is grouped into clearly-labeled
+# subgroups below. Every knob is also overridable on the CLI (Hydra dotpath), e.g.:
+#
+#   python main.py belief.init_miss=0.5 belief.init_spread=1.4
+#   python main.py grid.merge_threshold_h=0.5 reward.man_cost=-3
+#   python main.py +preset=coarse            # swap in a whole preset (conf/preset/coarse.yaml)
+#   python main.py +preset=verify            # the machinery-verification run (the anchor)
+#   python main.py -m belief.init_miss=0.5,3,5     # Hydra multirun sweep over a knob
+#
+# NO environment variables. NO subprocess-per-conjunction. Config is the default and only
+# surface. Every knob -> its dotpath is mapped in notes/SCENARIO_KNOBS.md.
+#
+# SCOPE: this file solves ONE given conjunction. It assumes the conjunction handed to it is
+# VALID. Deciding WHICH conjunctions are admissible + GENERATING the orbit pairs is a SEPARATE
+# concern (conjunction_generator + sweep_driver) — the solver never geometry-reduces or
+# feasibility-guards here; it just solves the orbit pair it is given (a non-dangerous one
+# simply yields a no-maneuver policy).
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# CONJUNCTION — WHICH physical encounter, as an explicit orbit pair (KOE deg
+#   [a, e, i, RAAN, omega, M]). null/null => the default reference scenario (SC1 550km/i55 +
+#   rtn-placed SC2). For a real catalogued / generated conjunction give both orbits; a sweep's
+#   generator (conjunction_generator) emits these pairs. The solver assumes the pair is valid.
+# -----------------------------------------------------------------------------
+conjunction:
+  sc1_oe: null
+  sc2_oe: null
+
+# -----------------------------------------------------------------------------
+# GRID — the propagation backend + the decision-stage timeline / cadence.
+# -----------------------------------------------------------------------------
+grid:
+  propagator: numerical        # numerical | keplerian (two-body) | drag (J2+drag+SRP, experiments)
+  hour_grid_h: null            # base ~2h cadence (hours-before-TCA desc). null => default
+                               #   [24,22,20,18,16,14,12,10,4,2]. Coarsen for speed (see preset/coarse).
+  merge_threshold_h: 0.25      # a GS contact within this of a stage MERGES onto it; else spawns one.
+                               #   0.25 => 25 stages/18 contacts; 0.5 => 20/15 (frozen-gate reference).
+  sync_rule: later             # later (staggered: both SC reported since last sync) | simultaneous
+
+# -----------------------------------------------------------------------------
+# CONTACTS — the SDec sync lever (Scenario-1 ablation). null => the full available set
+#   (computed from the GS network x orbits); a list restricts to those stage indices;
+#   [] => no contacts (Dec-like). MUST be a subset of the available set.
+# -----------------------------------------------------------------------------
+contacts:
+  stages: null
+
+# -----------------------------------------------------------------------------
+# BELIEF — the operator's UNCERTAIN ESTIMATE (the POMDP danger x uncertainty dial; what
+#   sync resolves). Distinct from the conjunction's physical orbits above.
+# -----------------------------------------------------------------------------
+belief:
+  init_miss: 0.0               # TOTAL believed miss (km) = DANGER. <1 => must maneuver; ~5 => clear.
+  init_spread: 1.4             # |dt| spread half-width (km) = UNCERTAINTY. 0 => point belief.
+  perp: 0.0                    # fixed sideways standoff (km); an along-track burn can't reduce it.
+
+# -----------------------------------------------------------------------------
+# REWARD — tuning knobs you rarely touch.
+# -----------------------------------------------------------------------------
+reward:
+  man_cost: -2.0               # per agent-burn. -2 => clean 2-burn; -1 over-maneuvers; -5+ lazy.
+  disp_k: 0.2                  # convex displacement curvature. 'none'/'linear' => legacy linear ramp.
+
+# -----------------------------------------------------------------------------
+# SOLVE — which variants + the Dec solver budget.
+# -----------------------------------------------------------------------------
+solve:
+  variants: [centralized, sdec, dec]
+  iter_limit: 10000            # Dec RS-MAA* budget.
+
+# -----------------------------------------------------------------------------
+# RUN — runner/output (NOT scenario fields; steer the runner, not the model).
+# -----------------------------------------------------------------------------
+run:
+  tag: config_run
+  out_dir: notes/results
+  fig_dir: notes/figures
+  figures: false
+  rollout: false               # also brahe-validate the solved policy (rollout_v2 MC)
+  rollouts: 200
+
+# -----------------------------------------------------------------------------
+# WANDB — experiment logging on top of the CSV (CSV stays source of truth).
+# -----------------------------------------------------------------------------
+wandb:
+  enabled: false
+  project: spacecraftCA
+  entity: kmeans_gsopt         # the wandb account/team for this project (set 2026-06-24).
+                               # TODO: put default as null before cleanup into github final benchmark 
+                               #   override per-run with wandb.entity=<team>; null => default login.
+  mode: online                 # online | offline | disabled
+  name: null

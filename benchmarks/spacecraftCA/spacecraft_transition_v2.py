@@ -51,16 +51,13 @@ N_JOINT_OBS  = N_OBS_AGENT ** 2
 # a single burn cost as much as 10 off-nominal stages, biasing the policy toward NOT
 # maneuvering. Lowered to -1 (2026-06-10 cont.) so the burn/deviation/risk tradeoff is
 # balanced and the policy will actually maneuver when warranted.)
-REWARD_MANEUVER  =  -2.0   # per agent-burn (env SPACECRAFT_MAN_COST overrides for tuning)
+REWARD_MANEUVER  =  -2.0   # per agent-burn (config cfg.reward.man_cost sets it)
 REWARD_DEVIATION =  -1.0   # per stage per agent off-nominal (vdev != NOM)
 REWARD_STEP      =   0.0
 # 2026-06-20d: was -1, but at -1 the policy OVER-MANEUVERS (4-burn dance, 2 m/s) because a far
 # single burn (~9km, disp ~-3) ~ties 3 extra burns. -2 collapses it to a clean 2-burn (1 m/s,
 # brahe 0% coll, lands 5.5-7.5km); -3 == -2. -2 chosen as the default. Too high (-5+) makes the
-# policy lazy (one far burn to ~9km instead of threading 4-7km). Env SPACECRAFT_MAN_COST sweeps it.
-_man_env = os.environ.get("SPACECRAFT_MAN_COST")
-if _man_env is not None:
-    REWARD_MANEUVER = float(_man_env)
+# policy lazy (one far burn to ~9km instead of threading 4-7km). cfg.reward.man_cost sweeps it.
 
 # ---------------------------------------------------------------------------
 # Terminal reward = TWO OPPOSING RAMPS in miss/dT space (v2 redesign).
@@ -94,11 +91,21 @@ DISP_COST_PER_KM       = 0.5   # (legacy linear slope; used iff DISP_QUADRATIC_K
 # Physically defensible: phasing-restoration dV grows super-linearly with displacement.
 DISP_QUADRATIC_K       = 0.2   # free curvature knob (SWEEP: 0.2 mild .. 1.0 aggressive).
                                # 0.2 = the value that revived Cen<SDec<Dec (2026-06-19b).
-# Env override for the curvature sweep (e.g. SPACECRAFT_DISP_K=0.2). "none"/"linear"
-# falls back to the legacy linear ramp. Keeps the sweep reproducible without code edits.
-_disp_k_env = os.environ.get("SPACECRAFT_DISP_K")
-if _disp_k_env is not None:
-    DISP_QUADRATIC_K = None if _disp_k_env.lower() in ("none", "linear") else float(_disp_k_env)
+# Config sets the curvature (cfg.reward.disp_k). disp_k=None ("none"/"linear" in config)
+# falls back to the legacy linear ramp. set_reward() applies both reward knobs.
+
+
+def set_reward(man_cost=None, disp_k="__keep__"):
+    """Apply the reward knobs from the scenario (config-driven; NO env vars). Called by
+    scenario_config.build_reward AFTER this module is imported. man_cost=None keeps the
+    current REWARD_MANEUVER; disp_k sentinel "__keep__" keeps DISP_QUADRATIC_K (pass None
+    explicitly to select the legacy linear ramp, or a float for the convex curvature)."""
+    global REWARD_MANEUVER, DISP_QUADRATIC_K
+    if man_cost is not None:
+        REWARD_MANEUVER = float(man_cost)
+    if disp_k != "__keep__":
+        DISP_QUADRATIC_K = None if disp_k is None else float(disp_k)
+    return REWARD_MANEUVER, DISP_QUADRATIC_K
 
 # Collision threshold used for the collision-probability metric (unchanged).
 # (RISK_COLLISION_KM is the reward floor; the binary collision flag uses D's threshold.)
@@ -333,10 +340,16 @@ def next_dt_distribution(dt_km: float, delta_vdev_sum: int, rate_k: float,
     exec_sigma = (EXEC_DV_ERROR_FRAC * abs(lever_k) * np.sqrt(n_new_burns)
                   if n_new_burns > 0 else 0.0)
     dt_mean = dt_km + delta_vdev_sum * lever_k
-    counts = np.zeros(D.N_DT, dtype=np.float64)
-    for i in range(TRANSITION_NOISE_N_SAMPLES):
-        x = dt_mean + drift_sigma * _DRIFT_STD_NORMAL[i] + exec_sigma * _EXEC_STD_NORMAL[i]
-        counts[D.dt_to_bin(x)] += 1.0
+    # Vectorized equivalent of the per-sample loop (verified bit-for-bit identical over
+    # 984 (mean, sigma) cases incl. extreme tails, max abs diff 0.0; ~9x faster):
+    #   for i: x = dt_mean + drift_sigma*Z_d[i] + exec_sigma*Z_e[i]; counts[dt_to_bin(x)] += 1
+    # dt_to_bin(x) returns the first bin i with x < DT_EDGES_KM[i+1], clamped to N_DT-1 --
+    # i.e. searchsorted on the upper edges (side='right'), clamped. Same fixed normal sample
+    # arrays are reused, so it is the exact same empirical distribution.
+    x = dt_mean + drift_sigma * _DRIFT_STD_NORMAL + exec_sigma * _EXEC_STD_NORMAL
+    bins = np.searchsorted(D.DT_EDGES_KM[1:], x, side="right")
+    np.clip(bins, 0, D.N_DT - 1, out=bins)
+    counts = np.bincount(bins, minlength=D.N_DT).astype(np.float64)
     return counts / counts.sum()
 
 
