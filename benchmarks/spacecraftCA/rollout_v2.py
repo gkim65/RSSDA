@@ -176,6 +176,54 @@ class PomdpPolicySource(PolicySource):
         return nb, (n0, n1)
 
 
+class DecPolicySource(PolicySource):
+    """Fully-decentralized RS-MAA* policy as a rollout_v2 PolicySource, so the Dec variant flies
+    through the SAME vectorized brahe engine as Cen/SDec (instead of being skipped). Wraps the
+    RS-MAA* (policy, clustering) returned by compare_variants_v2.solve_dec_rsmaa_v2, decoding
+    EXACTLY as compare_variants_v2.expected_rsmaa_return_v2's belief walk:
+
+      action: a1 = policy[step][0][c0], a2 = policy[step][1][c1]  (per-agent cluster pointers)
+      update: nc0 = clustering[step][0][c0][o1], nc1 = clustering[step][1][c1][o2]
+
+    Dec has NO shared belief and NO centralized sync, so we repurpose the engine's per-trajectory
+    `oh` slot to carry (c0, c1) and ignore `belief_i`; is_cen is always False, c_ptr -1. Per-agent
+    cluster pointers start at 0 (the walk's `(s, 0, 0)` root)."""
+
+    def __init__(self, full_result, obs_agent_size):
+        # full_result = (value, policy, clustering) from solve_dec_rsmaa_v2
+        _value, self.policy, self.clustering = full_result
+        self.obs_agent_size = obs_agent_size
+        self._c = {}        # trajectory i -> (c0, c1)
+
+    def reset_traj(self, i, init_state):
+        self._c[i] = (0, 0)
+
+    def action(self, i, step, belief_i, oh_i):
+        c0, c1 = self._c.get(i, (0, 0))
+        if step >= len(self.policy):
+            a1, a2 = 0, 0
+        else:
+            try:
+                a1 = int(self.policy[step][0][c0]); a2 = int(self.policy[step][1][c1])
+            except (IndexError, TypeError):
+                a1, a2 = 0, 0
+        a1, a2 = max(a1, 0), max(a2, 0)        # -1 cluster sentinel => WAIT
+        joint_act = a1 + TV.N_ACT_AGENT * a2
+        return joint_act, a1, a2, False, -1    # never centralized, no cen cluster pointer
+
+    def update(self, i, step, joint_act, is_cen, c_ptr, belief_i, oh_i, next_state, obs):
+        c0, c1 = self._c.get(i, (0, 0))
+        if obs is not None and step < len(self.clustering):
+            o1 = int(obs) % self.obs_agent_size; o2 = int(obs) // self.obs_agent_size
+            try:
+                c0 = max(int(self.clustering[step][0][c0][o1]), 0)
+                c1 = max(int(self.clustering[step][1][c1][o2]), 0)
+            except (IndexError, TypeError):
+                c0, c1 = 0, 0
+        self._c[i] = (c0, c1)
+        return belief_i, oh_i                  # belief/oh unused for dec; pass through
+
+
 # ---------------------------------------------------------------------------
 # Single closed-loop brahe trajectory
 # ---------------------------------------------------------------------------

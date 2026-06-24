@@ -322,14 +322,29 @@ def expected_return_from_policy(T, O, R, sdec, full_result, init_b, obs_agent_si
 PERP_KM = 0.0
 
 
-def solve_policy(variant, init_b):
-    """Solve an RS-SDA* variant (centralized/sdec) and return the SOLVED objects so a
-    consumer (e.g. rollout_v2.py) can reuse the CANONICAL policy + matrices without
-    rebuilding them. Same build path as solve_and_eval -> identical to the headline
-    numbers. Returns (T, O, R, perp, sdec, full). Not for dec (RS-MAA*, different API)."""
+def build_matrices(variant):
+    """Build the (T, O, R, perp) for a variant. These depend ONLY on the scenario
+    (orbit pair / grid / contacts / reward / perp) — NOT on the initial belief — so a
+    sweep over beliefs of the SAME conjunction can build these ONCE and reuse them
+    across every belief (the matrix-reuse seam consumed by _conj_worker.py). O DOES
+    depend on the active contact-stage subset (read inside build_T_O via
+    M.get_contact_stages), so rebuild per (variant, contact-subset), not per belief."""
     rate_at, perp, _ = TV.compute_gain_table_and_perp(PERP_KM, 0.0)
     T, O = TV.build_T_O(rate_at, variant)
     R = TV.build_R(perp)
+    return T, O, R, perp
+
+
+def solve_policy(variant, init_b, matrices=None):
+    """Solve an RS-SDA* variant (centralized/sdec) and return the SOLVED objects so a
+    consumer (e.g. rollout_v2.py) can reuse the CANONICAL policy + matrices without
+    rebuilding them. Same build path as solve_and_eval -> identical to the headline
+    numbers. Returns (T, O, R, perp, sdec, full). Not for dec (RS-MAA*, different API).
+
+    matrices: optional pre-built (T, O, R, perp) from build_matrices(variant) — pass it
+    to REUSE matrices across beliefs of the same conjunction (skips the ~22s rebuild).
+    None => build them here (the standalone path; unchanged behaviour)."""
+    T, O, R, perp = matrices if matrices is not None else build_matrices(variant)
     cs = {"centralized": list(range(D.N_STAGES)),
           "sdec": M.get_contact_stages()}[variant]
     model = v2_model(T, O, R, init_b, cs)
@@ -338,10 +353,21 @@ def solve_policy(variant, init_b):
     return T, O, R, perp, sdec, full
 
 
-def solve_and_eval(variant, init_b, rsmaa=False, rsmaa_cfg=None):
-    rate_at, perp, _ = TV.compute_gain_table_and_perp(PERP_KM, 0.0)
-    T, O = TV.build_T_O(rate_at, variant)
-    R = TV.build_R(perp)
+def solve_dec_policy(init_b, rsmaa_cfg=None, matrices=None):
+    """Solve the Dec variant (RS-MAA*) and return the SOLVED objects so a consumer (rollout_v2's
+    DecPolicySource) can fly the canonical Dec policy through brahe — the Dec analogue of
+    solve_policy. Returns (T, O, R, perp, dec_full) where dec_full = (value, policy, clustering)
+    from solve_dec_rsmaa_v2. matrices: optional pre-built (T,O,R,perp) to REUSE across beliefs."""
+    T, O, R, perp = matrices if matrices is not None else build_matrices("dec")
+    dec_full = solve_dec_rsmaa_v2(T, O, R, init_b, rsmaa_cfg or RSMAA_DEFAULTS)
+    return T, O, R, perp, dec_full
+
+
+def solve_and_eval(variant, init_b, rsmaa=False, rsmaa_cfg=None, matrices=None):
+    """Solve + expected-eval one variant. matrices: optional pre-built (T,O,R,perp) from
+    build_matrices(variant) to REUSE across beliefs of the same conjunction (skips the
+    ~22s rebuild); None => build here (standalone path, unchanged)."""
+    T, O, R, perp = matrices if matrices is not None else build_matrices(variant)
     obs_agent_size = TV.N_OBS_AGENT
     if rsmaa:
         # Dec via RS-MAA* (NOT RS-SDA* — per Mahdi's notes the Dec variant is solved
