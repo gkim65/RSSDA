@@ -68,7 +68,9 @@ reward:
   disp_k: 0.2                  # convex displacement curvature. 'none'/'linear' => legacy linear ramp.
 
 # -----------------------------------------------------------------------------
-# SOLVE — which variants + the Dec solver budget.
+# SOLVE — which POMDP variants + the Dec solver budget. This is the SOLVED-policy "policy set".
+#   `[]` => SKIP the POMDP solve entirely (e.g. a baseline-only run; see `baseline:` below).
+#   The B1 operator floor is a SEPARATE policy with its own gate — it is NOT a value here.
 # -----------------------------------------------------------------------------
 solve:
   variants: [centralized, sdec, dec]
@@ -84,6 +86,29 @@ run:
   figures: false
   rollout: false               # also brahe-validate the solved policy (rollout_v2 MC)
   rollouts: 200
+
+# -----------------------------------------------------------------------------
+# BASELINE — the B1 operator-heuristic FLOOR. A SEPARATE policy in its own right (per-craft
+#   hand-coded strategies, NO solver) — NOT a solve.variants entry. Has its OWN on/off gate so
+#   a run can be: SOLVE-ONLY (baseline.enabled=false, the default -> anchor untouched),
+#   BASELINE-ONLY (solve.variants=[] + baseline.enabled=true), or BOTH.
+#   When on it flies the SAME conjunction/belief/backend through rollout_v2's brahe engine and
+#   reports the SAME 4-7km band stats + maneuvers as the POMDP brahe rollout (run.rollout) —
+#   the direct, same-axis brahe-MC-vs-brahe-MC comparison. See baselines_spacecraftCA/baseline_b1.py.
+# -----------------------------------------------------------------------------
+baseline:
+  enabled: false             # default off -> POMDP-only (anchor) unchanged.
+  strategy: threshold        # threshold | selfish | fixedlead | firereturn (shared per-craft).
+  strategy_sc1: null         # optional per-craft override (mixed-strategy runs).
+  strategy_sc2: null
+  policy: conservative       # threshold sub-policy: conservative | aggressive | asymmetric | poc.
+  selfish_model: obsaware    # selfish's model of the other craft: blind | cautious-margin |
+                             #   cautious-early | obsaware.
+  other_obs: tle             # other-craft obs fidelity: perfect | tle | frozen.
+  tle_sigma: null            # base TLE along-track sigma (km); null => baseline_b1 default.
+  variant: sdec              # OBS model only (centralized|sdec|dec); NO solver.
+  rollouts: 200              # brahe-MC rollouts for the B1 band stats.
+  seed: 0
 
 # -----------------------------------------------------------------------------
 # WANDB — experiment logging on top of the CSV (CSV stays source of truth).
