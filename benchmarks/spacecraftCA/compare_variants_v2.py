@@ -60,8 +60,17 @@ RSMAA_DEFAULTS = dict(
 
 
 def build_config_fixed():
-    # fixed-mode (TI1=False) to match the v1 -22.41 setup
-    return build_config(exact=False, ti1_enabled=False)
+    # fixed-mode (TI1=False) to match the v1 -22.41 setup. Graded-obs speed knobs ride on the
+    # applied Scenario (solve.sdec_tail_qmdp / solve.sdec_iter_limit); both default to the anchor
+    # values so an unset config is byte-identical to the -7.83 reference.
+    cfg = build_config(exact=False, ti1_enabled=False)
+    if getattr(_SCENARIO, "sdec_tail_qmdp", False):
+        cfg.tail_heuristic_type = "QMDP"
+        cfg.rec_limit = 1
+    _il = getattr(_SCENARIO, "sdec_iter_limit", None)
+    if _il is not None:
+        cfg.iter_limit = int(_il)
+    return cfg
 
 
 def v2_model(T, O, R, init_b, sync_stages):
@@ -444,6 +453,21 @@ def main():
     ap.add_argument("--disp-k", default=None,
                     help="convex displacement curvature (cfg.reward.disp_k; "
                          "'none'/'linear' => legacy linear ramp).")
+    ap.add_argument("--obs-fidelity", default=None,
+                    help="SDec sync obs fidelity (cfg.obs.fidelity): "
+                         "perfect|gps|tle|asymmetric. perfect (default) == anchor.")
+    ap.add_argument("--obs-sigma", default=None,
+                    help="raw SDec sync obs sigma km (cfg.obs.sigma); overrides the named "
+                         "fidelity for a smooth sync-value curve. 'none' => perfect delta.")
+    ap.add_argument("--obs-coarse", dest="obs_coarse", action="store_true", default=None,
+                    help="coarsen km-scale syncs onto the signed operational alphabet "
+                         "(cfg.obs.coarse); makes the TLE solves tractable. OFF => fine bins.")
+    ap.add_argument("--sdec-tail-qmdp", dest="sdec_tail_qmdp", action="store_true", default=None,
+                    help="SDec/Cen RS-SDA* QMDP tail approx + rec_limit=1 (cfg.solve.sdec_tail_qmdp; "
+                         "graded-obs speedup). OFF => anchor byte-identical.")
+    ap.add_argument("--sdec-iter-limit", type=int, default=None,
+                    help="SDec/Cen RS-SDA* TI2 pruning budget (cfg.solve.sdec_iter_limit; "
+                         "default 2000 == anchor).")
     ap.add_argument("--hour-grid", default=None,
                     help="base decision cadence, comma hours-before-TCA desc "
                          "(cfg.grid.hour_grid_h; default ~2h).")

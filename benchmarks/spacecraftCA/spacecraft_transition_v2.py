@@ -107,6 +107,98 @@ def set_reward(man_cost=None, disp_k="__keep__"):
         DISP_QUADRATIC_K = None if disp_k is None else float(disp_k)
     return REWARD_MANEUVER, DISP_QUADRATIC_K
 
+
+# ---------------------------------------------------------------------------
+# Observation FIDELITY (the obs-quality experiment lever — SDec ONLY).
+# ---------------------------------------------------------------------------
+# A sync used to be a PERFECT readout of the shared dt_bin (perfect_shared_obs = a delta).
+# That made one well-timed sync ~= many syncs -> Cen ~= SDec, killing obs leverage. The
+# fidelity knob replaces the sync delta with a GRADED obs: a NORMALIZED prob distribution
+# over observed dt_bins, peaked at the true bin and spread by a Gaussian of width sigma_km
+# discretized onto the dt grid. perfect == the sigma->0 limit (the existing delta, so the
+# regression anchor stays byte-identical). Applied ONLY to the SDec sync branch in build_T_O;
+# Centralized and Dec are untouched fixed rails (Cen sync stays the perfect delta, Dec never
+# syncs). See notes/SCENARIO_KNOBS.md §E and notes/LITERATURE_CA_THRESHOLDS.md.
+#
+# Sigmas are GROUNDED in baselines_spacecraftCA/belief_filter.py (the literature along-track
+# obs-noise model, cited in LITERATURE_CA_THRESHOLDS.md): TLE_SIGMA_BASE_KM=2.0 grows to
+# TLE_SIGMA_MAX_KM=5.0 over TLE_CADENCE_H=8h via TLE_SIGMA_AGE_RATE_KM_PER_H=0.375. GPS (own
+# craft) is sub-km (~0.3 km). We import them from belief_filter (do NOT re-declare).
+try:
+    from baselines_spacecraftCA.belief_filter import (
+        TLE_SIGMA_BASE_KM, TLE_SIGMA_MAX_KM,
+    )
+except Exception:  # pragma: no cover - direct-dir layout fallback
+    from belief_filter import TLE_SIGMA_BASE_KM, TLE_SIGMA_MAX_KM  # type: ignore
+
+# GPS sub-km own-craft OD (LITERATURE_CA_THRESHOLDS.md "Onboard GPS": tens of m .. ~100 m;
+# ~0.3 km is a conservative km-bin-safe value). Not in belief_filter (which models the OTHER
+# craft via TLE), so it lives here with its citation.
+GPS_SIGMA_KM = 0.3
+# TLE-on-the-other at a sync: use the AGED worst case (5 km). At an 8h cadence the other-craft
+# TLE is ~one cadence stale by the time a sync fires, so TLE_SIGMA_MAX_KM is the honest value
+# (TLE_SIGMA_BASE_KM=2.0 would be a fresh fix, optimistic). The raw obs.sigma override lets a
+# sweep walk this between 2 and 5 km for the sync-value curve.
+TLE_SIGMA_KM = TLE_SIGMA_MAX_KM
+
+# Active obs config (set by set_obs / scenario_config). Per-craft sigma over the OTHER craft's
+# dt readout at a sync. (None sigma => the perfect delta, regardless of fidelity name.)
+OBS_FIDELITY = "perfect"          # perfect | gps | tle | asymmetric | sigma
+OBS_SIGMA1_KM = None              # craft-1's sync-obs sigma (km); None => perfect delta
+OBS_SIGMA2_KM = None              # craft-2's sync-obs sigma (km); None => perfect delta
+
+
+def _fidelity_sigmas(fidelity: str, sigma_km=None):
+    """Map a fidelity name (+ optional raw sigma override) to per-craft (sigma1, sigma2) km.
+    None sigma means a perfect delta for that craft. asymmetric = GPS-self / TLE-other: each
+    craft sees the SHARED dt limited by how well IT observes the OTHER craft (craft 1's readout
+    of the joint encounter is bounded by its TLE-of-2, craft 2's by its TLE-of-1) -- but since
+    each also has precise GPS on ITSELF, the better of the two readouts is what that craft
+    contributes. We model the per-craft sync-obs sigma as the craft's view of the joint dt:
+    GPS-self gives the craft a near-perfect self anchor, so its limiting noise on the SHARED dt
+    is its TLE-of-the-OTHER. => both craft carry TLE-other sigma under asymmetric; the GPS-self
+    advantage over pure TLE-vs-TLE is that NEITHER craft's self-position is the bottleneck (in
+    tle both self AND other are TLE). Concretely: tle = (TLE, TLE) on a COMBINED self+other
+    error; asymmetric = (TLE-other-only, TLE-other-only) -- a smaller sigma because self is GPS.
+    See LITERATURE_CA_THRESHOLDS.md (GPS-self / TLE-other split)."""
+    if sigma_km is not None:                      # raw override beats the named level
+        s = float(sigma_km)
+        return (s if s > 0 else None), (s if s > 0 else None)
+    f = (fidelity or "perfect").lower()
+    if f == "perfect":
+        return None, None
+    if f == "gps":
+        return GPS_SIGMA_KM, GPS_SIGMA_KM
+    if f == "tle":
+        # both self AND other are TLE -> combined along-track error ~ sqrt(2)*TLE on the joint dt
+        s = float(np.hypot(TLE_SIGMA_KM, TLE_SIGMA_KM))
+        return s, s
+    if f == "asymmetric":
+        # GPS-self (negligible) + TLE-other -> ONLY the other-craft TLE limits each readout
+        # (no sqrt(2): self is GPS, not a second TLE error). So asymmetric sigma < tle sigma --
+        # the headline "knowing your own state precisely helps" case.
+        return TLE_SIGMA_KM, TLE_SIGMA_KM
+    raise ValueError(f"unknown obs fidelity {fidelity!r} "
+                     f"(perfect|gps|tle|asymmetric, or pass obs.sigma)")
+
+
+def set_obs(fidelity=None, sigma_km="__keep__", coarse="__keep__"):
+    """Apply the obs-fidelity knobs (config-driven; NO env vars). Mirrors set_reward; called by
+    scenario_config.build_reward AFTER this module is imported. fidelity selects a grounded
+    sigma pair; sigma_km (sentinel "__keep__" keeps current; a float overrides the named level
+    for the smooth sync-value curve; None/0 => perfect delta). coarse (sentinel "__keep__" keeps;
+    True/False toggles the coarse operational obs alphabet) -- OFF by default so the anchor is
+    byte-identical. Stores per-craft sigmas so the asymmetric case can carry different fidelity
+    per craft."""
+    global OBS_FIDELITY, OBS_SIGMA1_KM, OBS_SIGMA2_KM, OBS_COARSE
+    if fidelity is not None:
+        OBS_FIDELITY = str(fidelity).lower()
+    raw = None if sigma_km == "__keep__" else sigma_km
+    OBS_SIGMA1_KM, OBS_SIGMA2_KM = _fidelity_sigmas(OBS_FIDELITY, raw)
+    if coarse != "__keep__":
+        OBS_COARSE = bool(coarse)
+    return OBS_FIDELITY, OBS_SIGMA1_KM, OBS_SIGMA2_KM, OBS_COARSE
+
 # Collision threshold used for the collision-probability metric (unchanged).
 # (RISK_COLLISION_KM is the reward floor; the binary collision flag uses D's threshold.)
 
@@ -176,6 +268,131 @@ def private_vdev_only_obs(vdev1: int, vdev2: int) -> np.ndarray:
     """Off-sync: each agent sees only its own vdev (null dt symbol)."""
     p1 = np.zeros(N_OBS_AGENT); p1[local_obs_index(DT_NULL_OBS, vdev1)] = 1.0
     p2 = np.zeros(N_OBS_AGENT); p2[local_obs_index(DT_NULL_OBS, vdev2)] = 1.0
+    return _independent_joint_obs(p1, p2)
+
+
+# ---------------------------------------------------------------------------
+# COARSE observation alphabet (opt-in; OFF by default => anchor byte-identical).
+# ---------------------------------------------------------------------------
+# A km-scale (TLE) sensor cannot resolve the fine 1-3 km dt state bins -- a sigma=5 km readout
+# smears across ~10 of the 15 fine bins, so the belief tree branches ~10 ways per sync and never
+# prunes (the solve-cost wall). Worse, a 5 km sensor reporting a 1 km-resolution bin is FALSE
+# PRECISION. The honest model: a noisy sync resolves the encounter into a few OPERATIONALLY
+# MEANINGFUL buckets, not 15 fine bins. We coarsen the OBSERVATION ONLY (the `o` axis of O); the
+# STATE grid (T, R, miss, collision, reward) stays FINE and IDENTICAL across fidelities, so TLE
+# and perfect runs are directly comparable and propagation/brahe are unaffected.
+#
+# The coarse symbols are the SIGNED OPERATIONAL THRESHOLDS already in the reward (collision<1,
+# "never below 4", safe-band 7 km): a fine dt bin maps to the group its CENTER falls in, by
+# |center| against [1,4,7] with sign. ~5 signed groups (far-neg / near-neg / DANGER / near-pos /
+# far-pos). A coarsened sync's Gaussian mass is REASSIGNED to each group's REPRESENTATIVE fine
+# bin (the fine bin nearest the group's mass-weighted center), so the sync yields at most ~5
+# distinct observed symbols instead of ~10 -> the tree prunes -> tractable. O keeps its fine
+# shape (N_OBS_AGENT unchanged) so the rollout decode + belief update are untouched.
+#
+# Per-craft + sigma-aware: coarsening kicks in for a craft ONLY when its sigma exceeds the local
+# bin width (set_obs decides). GPS (sigma 0.3 km < bin width) already collapses to 1 bin, so it
+# is left FINE automatically; TLE / asymmetric-other (sigma ~5-7 km) coarsen. User-opt-in
+# (OBS_COARSE, cfg.obs.coarse=true); default False => fine bins => anchor unchanged.
+OBS_COARSE = False                       # cfg.obs.coarse; True => coarsen km-scale (TLE) syncs
+_COARSE_THRESHOLDS_KM = (1.0, 4.0, 7.0)  # signed operational cut points (reused from the reward)
+
+
+def _coarse_group(dt_center_km: float) -> int:
+    """Signed operational bucket for a fine bin center: sign * (#thresholds crossed). Groups:
+    -3 far-neg | -2 | -1 near-neg | 0 DANGER(|dt|<1) | +1 near-pos | +2 | +3 far-pos."""
+    mag = abs(dt_center_km)
+    lvl = sum(1 for t in _COARSE_THRESHOLDS_KM if mag >= t)   # 0..3
+    return int(np.sign(dt_center_km)) * lvl
+
+
+def _coarse_reps():
+    """For each signed coarse group, the REPRESENTATIVE fine bin (nearest the group's center of
+    the fine bins it contains). Returns {group: rep_fine_bin}. Cached per dt grid (N_DT)."""
+    global _COARSE_REPS_CACHE
+    key = (D.N_DT, tuple(round(D.dt_bin_center_km(b), 4) for b in range(D.N_DT)))
+    if _COARSE_REPS_CACHE.get("key") == key:
+        return _COARSE_REPS_CACHE["reps"]
+    groups = {}
+    for b in range(D.N_DT):
+        groups.setdefault(_coarse_group(D.dt_bin_center_km(b)), []).append(b)
+    reps = {}
+    for g, bins in groups.items():
+        cs = [D.dt_bin_center_km(b) for b in bins]
+        gc = float(np.mean(cs))
+        reps[g] = bins[int(np.argmin([abs(c - gc) for c in cs]))]
+    _COARSE_REPS_CACHE = {"key": key, "reps": reps}
+    return reps
+
+
+_COARSE_REPS_CACHE = {}
+
+
+def _dt_obs_dist(true_dt_bin: int, sigma_km, coarse: bool = None) -> np.ndarray:
+    """Per-craft observation distribution over the N_DT dt bins given the TRUE bin and a
+    Gaussian readout noise of width sigma_km (along-track km). Returns a NORMALIZED length-N_DT
+    prob vector over dt bins (NOT including the null symbol -- a sync always yields a dt).
+
+    The Gaussian density is evaluated at each bin CENTER (dt_bin_center_km) and re-normalized
+    over the bins, so the result is a proper prob dist peaked at the true bin and spreading to
+    neighbours as sigma grows. sigma None / <=0 => the perfect delta (mass 1 on the true bin),
+    so the sigma->0 limit reproduces perfect_shared_obs exactly (anchor-preserving).
+
+    coarse (None => module OBS_COARSE): when True, the Gaussian mass is COLLAPSED onto the signed
+    operational coarse-group REPRESENTATIVE bins (see above) -- so a km-scale sensor yields ~5
+    distinct symbols, not ~10, collapsing the belief tree. Mass is conserved (still sums to 1)
+    and still peaked at the true bin's group, so it remains a proper, comparable obs dist."""
+    if coarse is None:
+        coarse = OBS_COARSE
+    if sigma_km is None or sigma_km <= 0.0:
+        d = np.zeros(D.N_DT, dtype=np.float64)
+        d[true_dt_bin] = 1.0
+        return d
+    mu = D.dt_bin_center_km(true_dt_bin)
+    centers = np.array([D.dt_bin_center_km(b) for b in range(D.N_DT)], dtype=np.float64)
+    w = np.exp(-0.5 * ((centers - mu) / float(sigma_km)) ** 2)
+    s = w.sum()
+    if s <= 1e-300:          # sigma so small every bin underflows -> fall back to delta
+        d = np.zeros(D.N_DT, dtype=np.float64)
+        d[true_dt_bin] = 1.0
+        return d
+    d = w / s
+    if not coarse:
+        return d
+    # COARSEN: sum each fine bin's mass into its signed operational group, then place the group
+    # total on the group's representative fine bin. Shrinks the # of distinct obs outcomes.
+    reps = _coarse_reps()
+    gmass = {}
+    for b in range(D.N_DT):
+        if d[b] > 0.0:
+            gmass[_coarse_group(centers[b])] = gmass.get(_coarse_group(centers[b]), 0.0) + d[b]
+    out = np.zeros(D.N_DT, dtype=np.float64)
+    for g, m in gmass.items():
+        out[reps[g]] += m
+    return out
+
+
+def graded_shared_obs(dt_bin: int, vdev1: int, vdev2: int,
+                      sigma1_km=None, sigma2_km=None) -> np.ndarray:
+    """SDec sync with GRADED fidelity: each agent observes the SHARED true dt_bin through its
+    OWN Gaussian readout noise (sigma1 / sigma2 km) plus its own exact vdev. Returns a joint
+    obs distribution over N_JOINT_OBS. When both sigmas are None/<=0 this is exactly the perfect
+    delta (== perfect_shared_obs), so obs.fidelity=perfect is byte-identical to the old path.
+
+    Coarsening (OBS_COARSE, user-opt-in) collapses each craft's obs onto the operational alphabet.
+    GPS needs no special-casing: its sub-bin sigma already lands ~all mass in ONE coarse group, so
+    coarsening it is a near no-op (the fine peak is preserved). So a single boolean suffices."""
+    if (sigma1_km is None or sigma1_km <= 0.0) and (sigma2_km is None or sigma2_km <= 0.0):
+        return perfect_shared_obs(dt_bin, vdev1, vdev2)
+    d1 = _dt_obs_dist(dt_bin, sigma1_km, coarse=OBS_COARSE)
+    d2 = _dt_obs_dist(dt_bin, sigma2_km, coarse=OBS_COARSE)
+    p1 = np.zeros(N_OBS_AGENT, dtype=np.float64)
+    p2 = np.zeros(N_OBS_AGENT, dtype=np.float64)
+    for b in range(D.N_DT):
+        if d1[b] > 0.0:
+            p1[local_obs_index(b, vdev1)] = d1[b]
+        if d2[b] > 0.0:
+            p2[local_obs_index(b, vdev2)] = d2[b]
     return _independent_joint_obs(p1, p2)
 
 
@@ -420,7 +637,17 @@ def build_T_O(rate_at: np.ndarray, variant: str, verbose: bool = False):
                                 sp = D.state_index(nb, nv1, nv2, k + 1)
                                 T[a, s, sp] += p
                                 if sync_next:
-                                    pj = perfect_shared_obs(nb, nv1, nv2)
+                                    # GRADED obs lever is SDec-ONLY (the experiment variable):
+                                    # Centralized's per-stage sync stays the PERFECT delta (a
+                                    # fixed top rail), and Dec never syncs (off-sync branch).
+                                    # So obs.fidelity changes ONLY the SDec sync readout; with
+                                    # perfect (default) graded_shared_obs == perfect_shared_obs
+                                    # for all variants -> anchor byte-identical.
+                                    if variant == "sdec":
+                                        pj = graded_shared_obs(nb, nv1, nv2,
+                                                               OBS_SIGMA1_KM, OBS_SIGMA2_KM)
+                                    else:
+                                        pj = perfect_shared_obs(nb, nv1, nv2)
                                 else:
                                     pj = private_vdev_only_obs(nv1, nv2)
                                 O[a, sp, :] += p * pj

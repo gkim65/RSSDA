@@ -64,9 +64,25 @@ class Scenario:
     man_cost: float = -2.0                         # per agent-burn
     disp_k: Optional[float] = 0.2                  # convex displacement curvature; None => legacy linear
 
+    # --- observation fidelity (the obs-quality experiment lever; SDec-ONLY) ----
+    # perfect (default delta; anchor unchanged) | gps (sub-km both) | tle (TLE-vs-TLE worst
+    # case) | asymmetric (GPS-self/TLE-other, the headline). obs_sigma = raw km override for a
+    # smooth sync-value curve (beats the named level when set). Affects ONLY the SDec sync obs;
+    # Centralized/Dec are fixed rails. Sigmas grounded in belief_filter (see transition_v2).
+    obs_fidelity: str = "perfect"
+    obs_sigma: Optional[float] = None              # raw km; None => use the named level
+    obs_coarse: bool = False                       # coarse operational obs alphabet (km-scale
+                                                   # syncs -> ~5 signed symbols); OFF => fine bins
+                                                   # => anchor byte-identical. User-opt-in for the
+                                                   # sigma (TLE) experiments (makes them tractable).
+
     # --- solve knobs ----------------------------------------------------------
     variants: List[str] = field(default_factory=lambda: ["centralized", "sdec", "dec"])
     iter_limit: int = 10000                        # Dec RS-MAA* budget
+    sdec_tail_qmdp: bool = False                   # SDec/Cen RS-SDA*: QMDP tail approx + rec_limit=1
+                                                   # (graded-obs speedup). OFF => anchor byte-identical.
+    sdec_iter_limit: int = 2000                    # SDec/Cen RS-SDA* TI2 pruning budget (default 2000;
+                                                   # lower => harder prune for graded-obs solves).
 
     def to_dict(self) -> dict:
         """Plain dict (for wandb config logging / round-trip)."""
@@ -98,6 +114,7 @@ def scenario_from_cfg(cfg) -> Scenario:
         cfg.belief.{init_miss,init_spread,perp}
         cfg.contacts.stages
         cfg.reward.{man_cost,disp_k}
+        cfg.obs.{fidelity,sigma}
         cfg.solve.{variants,iter_limit}
     Missing groups/fields fall back to the Scenario defaults."""
     # tolerate either OmegaConf or a plain dict; .get works on dict, getattr on OmegaConf
@@ -128,6 +145,7 @@ def scenario_from_cfg(cfg) -> Scenario:
     belief = sub("belief")
     contacts = sub("contacts")
     reward = sub("reward")
+    obs = sub("obs")
     solve = sub("solve")
 
     d = Scenario()  # defaults
@@ -139,6 +157,12 @@ def scenario_from_cfg(cfg) -> Scenario:
 
     variants = g(solve, "variants", d.variants)
     variants = list(variants) if variants is not None else d.variants
+
+    obs_sigma_raw = g(obs, "sigma", d.obs_sigma)
+    if isinstance(obs_sigma_raw, str) and obs_sigma_raw.lower() in ("none", "null", ""):
+        obs_sigma_val = None
+    else:
+        obs_sigma_val = None if obs_sigma_raw is None else float(obs_sigma_raw)
 
     return Scenario(
         propagator=str(g(grid, "propagator", d.propagator)).lower(),
@@ -153,8 +177,13 @@ def scenario_from_cfg(cfg) -> Scenario:
         contact_stages=_as_int_list(g(contacts, "stages", d.contact_stages)),
         man_cost=float(g(reward, "man_cost", d.man_cost)),
         disp_k=disp_k_val,
+        obs_fidelity=str(g(obs, "fidelity", d.obs_fidelity)).lower(),
+        obs_sigma=obs_sigma_val,
+        obs_coarse=bool(g(obs, "coarse", d.obs_coarse)),
         variants=[str(v) for v in variants],
         iter_limit=int(g(solve, "iter_limit", d.iter_limit)),
+        sdec_tail_qmdp=bool(g(solve, "sdec_tail_qmdp", d.sdec_tail_qmdp)),
+        sdec_iter_limit=int(g(solve, "sdec_iter_limit", d.sdec_iter_limit)),
     )
 
 
@@ -255,8 +284,13 @@ def _cli_bootstrap_scenario(argv):
     ap.add_argument("--contact-stages", default="__unset__")
     ap.add_argument("--man-cost", type=float, default=None)
     ap.add_argument("--disp-k", default=None)
+    ap.add_argument("--obs-fidelity", default=None)
+    ap.add_argument("--obs-sigma", default=None)
+    ap.add_argument("--obs-coarse", dest="obs_coarse", action="store_true", default=None)
     ap.add_argument("--hour-grid", default=None)
     ap.add_argument("--merge-threshold", type=float, default=None)
+    ap.add_argument("--sdec-tail-qmdp", dest="sdec_tail_qmdp", action="store_true", default=None)
+    ap.add_argument("--sdec-iter-limit", type=int, default=None)
     ns, _ = ap.parse_known_args(argv[1:])
 
     cfg = load_yaml_cfg(ns.scenario_config) if ns.scenario_config else {}
@@ -285,6 +319,17 @@ def _cli_bootstrap_scenario(argv):
     if ns.disp_k is not None:
         overrides["disp_k"] = (None if str(ns.disp_k).lower() in ("none", "linear")
                                else float(ns.disp_k))
+    if ns.obs_fidelity is not None:
+        overrides["obs_fidelity"] = ns.obs_fidelity.lower()
+    if ns.obs_sigma is not None:
+        overrides["obs_sigma"] = (None if str(ns.obs_sigma).lower() in ("none", "null")
+                                  else float(ns.obs_sigma))
+    if ns.obs_coarse is not None:
+        overrides["obs_coarse"] = True
+    if ns.sdec_tail_qmdp is not None:
+        overrides["sdec_tail_qmdp"] = True
+    if ns.sdec_iter_limit is not None:
+        overrides["sdec_iter_limit"] = ns.sdec_iter_limit
 
     from dataclasses import replace
     scenario = replace(base, **overrides)
@@ -292,11 +337,15 @@ def _cli_bootstrap_scenario(argv):
 
 
 def build_reward(scenario) -> None:
-    """Apply the reward knobs to spacecraft_transition_v2. Separate from build_scenario because
-    transition_v2 is a model module (importing it triggers the grid value-bindings), so it must
-    be imported only AFTER build_scenario has populated the grid. Entry points call this right
-    after `import spacecraft_transition_v2 as TV`."""
+    """Apply the reward + obs-fidelity knobs to spacecraft_transition_v2. Separate from
+    build_scenario because transition_v2 is a model module (importing it triggers the grid
+    value-bindings), so it must be imported only AFTER build_scenario has populated the grid.
+    Entry points call this right after `import spacecraft_transition_v2 as TV`. (Obs fidelity
+    rides here -- not in build_scenario -- for the same post-import reason; it is a transition_v2
+    setter exactly like set_reward.)"""
     if not isinstance(scenario, Scenario):
         scenario = scenario_from_cfg(scenario)
     import spacecraft_transition_v2 as TV
     TV.set_reward(man_cost=scenario.man_cost, disp_k=scenario.disp_k)
+    TV.set_obs(fidelity=scenario.obs_fidelity, sigma_km=scenario.obs_sigma,
+               coarse=scenario.obs_coarse)

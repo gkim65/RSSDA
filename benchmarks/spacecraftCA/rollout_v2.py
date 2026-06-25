@@ -627,6 +627,16 @@ def main():
                     help="YAML scenario config (the ONE config surface). NO env vars.")
     ap.add_argument("--man-cost", type=float, default=None)
     ap.add_argument("--disp-k", default=None)
+    ap.add_argument("--obs-fidelity", default=None,
+                    help="SDec sync obs fidelity (perfect|gps|tle|asymmetric).")
+    ap.add_argument("--obs-sigma", default=None,
+                    help="raw SDec sync obs sigma km (overrides the named fidelity).")
+    ap.add_argument("--obs-coarse", dest="obs_coarse", action="store_true", default=None,
+                    help="coarsen km-scale syncs onto the signed operational alphabet.")
+    ap.add_argument("--sdec-tail-qmdp", dest="sdec_tail_qmdp", action="store_true", default=None,
+                    help="SDec/Cen RS-SDA* QMDP tail approx + rec_limit=1 (graded-obs speedup).")
+    ap.add_argument("--sdec-iter-limit", type=int, default=None,
+                    help="SDec/Cen RS-SDA* TI2 pruning budget (default 2000 == anchor).")
     ap.add_argument("--hour-grid", default=None)
     ap.add_argument("--merge-threshold", type=float, default=None)
     ap.add_argument("--variant", choices=["centralized", "sdec"], default="sdec",

@@ -68,6 +68,25 @@ reward:
   disp_k: 0.2                  # convex displacement curvature. 'none'/'linear' => legacy linear ramp.
 
 # -----------------------------------------------------------------------------
+# OBS — observation FIDELITY at an SDec sync (the obs-quality experiment lever). SDEC-ONLY:
+#   Centralized stays perfect-every-stage and Dec never syncs (fixed reference rails). A sync
+#   becomes a GRADED noisy readout of the shared dt (a Gaussian over dt bins), so more/noisier
+#   syncs can be compared. perfect (default) == the old delta => the regression anchor is
+#   byte-identical. Sigmas are grounded in belief_filter (TLE 2->5 km aged, GPS ~0.3 km);
+#   see notes/LITERATURE_CA_THRESHOLDS.md + notes/SCENARIO_KNOBS.md §E.
+# -----------------------------------------------------------------------------
+obs:
+  fidelity: perfect            # perfect | gps (sub-km both) | tle (TLE-vs-TLE worst case) |
+                               #   asymmetric (GPS-self / TLE-other, the headline)
+  sigma: null                  # raw km override (beats the named level) for a smooth sync-value
+                               #   curve; null => use the named fidelity's grounded sigma.
+  coarse: false                # OFF => fine dt obs bins (anchor byte-identical). true => collapse
+                               #   km-scale (TLE) syncs onto the SIGNED OPERATIONAL alphabet
+                               #   (1/4/7 km buckets) so the noisy belief tree prunes -> the sigma
+                               #   experiments become tractable. GPS stays sharp automatically.
+                               #   USER-OPT-IN for the obs-fidelity (TLE) experiments.
+
+# -----------------------------------------------------------------------------
 # SOLVE — which POMDP variants + the Dec solver budget. This is the SOLVED-policy "policy set".
 #   `[]` => SKIP the POMDP solve entirely (e.g. a baseline-only run; see `baseline:` below).
 #   The B1 operator floor is a SEPARATE policy with its own gate — it is NOT a value here.
@@ -75,6 +94,10 @@ reward:
 solve:
   variants: [centralized, sdec, dec]
   iter_limit: 10000            # Dec RS-MAA* budget.
+  sdec_tail_qmdp: false        # SDec/Cen RS-SDA*: QMDP tail approx + rec_limit=1 (graded-obs
+                               #   speedup). false (default) => anchor byte-identical.
+  sdec_iter_limit: 2000        # SDec/Cen RS-SDA* TI2 pruning budget. Default 2000 == the anchor
+                               #   value; lower => harder progress-pruning for graded-obs solves.
 
 # -----------------------------------------------------------------------------
 # RUN — runner/output (NOT scenario fields; steer the runner, not the model).

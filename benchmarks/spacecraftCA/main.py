@@ -301,6 +301,9 @@ def _log_wandb(cfg, scenario, result, tag, brahe_rows=None, flagged=None, eff_mi
         "propagator": str(scenario.propagator),
         "man_cost": float(scenario.man_cost),
         "disp_k": ("linear" if scenario.disp_k is None else float(scenario.disp_k)),
+        "obs_fidelity": str(scenario.obs_fidelity),
+        "obs_sigma": ("none" if scenario.obs_sigma is None else float(scenario.obs_sigma)),
+        "obs_coarse": bool(scenario.obs_coarse),
     })
     if flagged is not None:
         wandb.summary["flagged"] = bool(flagged)
