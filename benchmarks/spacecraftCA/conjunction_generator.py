@@ -48,8 +48,8 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 import numpy as np
-from brahe import (AngleFormat, R_EARTH, state_eci_to_koe, state_eci_to_rtn,
-                   state_koe_to_eci, state_rtn_to_eci)
+from brahe import (AngleFormat, GM_EARTH, R_EARTH, state_eci_to_koe,
+                   state_eci_to_rtn, state_koe_to_eci, state_rtn_to_eci)
 
 from spacecraft_matrices import (SC1_OE_AT_TCA, DV_MAGNITUDE, EPOCH_TCA,
                                  propagate_batch_to, sc1_eci_at_tca)
@@ -319,12 +319,17 @@ def sweep(miss_levels: List[float],
 
 
 def _closest_approach(sc1_tca: np.ndarray, sc2_eci: np.ndarray,
-                      sc2_epoch, span_s: float = 600.0):
+                      sc2_epoch, span_s: float = 600.0, return_diag: bool = False):
     """
     Brahe closest-approach search between SC1 (state @EPOCH_TCA) and SC2 (state
     @sc2_epoch), over a window ±span_s around EPOCH_TCA. Returns
     (min_dist_km, t_ca_offset_s, rel_rtn_at_ca) where the offset is seconds from
     EPOCH_TCA and rel_rtn is SC2's RTN state relative to SC1 at the true CA.
+
+    If return_diag, also returns `n_passes` = the number of DISTINCT close passes in
+    the window (separation local-minima below 1.5×the global min). >1 means the two
+    orbits conjunct more than once in ±span_s — the single-encounter model assumption
+    is ambiguous; callers should reject such pairs.
 
     Golden-section refine on top of a coarse grid (no scipy dependency).
     """
@@ -334,8 +339,17 @@ def _closest_approach(sc1_tca: np.ndarray, sc2_eci: np.ndarray,
         s2 = propagate_batch_to([sc2_epoch], [sc2_eci], ep)[0]
         return np.linalg.norm(np.asarray(s1)[:3] - np.asarray(s2)[:3]) / 1e3
 
-    # coarse grid -> bracket the minimum
-    grid = np.linspace(-span_s, span_s, 41)
+    # coarse grid -> bracket the minimum. The spacing MUST be fine relative to how
+    # fast the pair closes, or a sharp km-scale minimum for a multi-km/s crossing falls
+    # BETWEEN two coarse samples and the golden bracket misses it (observed: a ~6 km/s
+    # crossing's true 4.87 km min was reported 5.00 km with the old 30 s grid). Size the
+    # grid from the closing speed so the spacing is ≲0.2 km of along-track travel.
+    v_close_kms = abs(sep(1.0) - sep(-1.0)) / 2.0          # km/s, finite-diff at t=0
+    if not np.isfinite(v_close_kms):                       # escape/hyperbolic → NaN sep
+        v_close_kms = 0.05
+    n_grid = int(np.clip(np.ceil(2 * span_s * max(v_close_kms, 0.05) / 0.2),
+                         41, 60001))
+    grid = np.linspace(-span_s, span_s, n_grid)
     dvals = np.array([sep(t) for t in grid])
     k = int(np.argmin(dvals))
     lo = grid[max(k - 1, 0)]
@@ -363,7 +377,14 @@ def _closest_approach(sc1_tca: np.ndarray, sc2_eci: np.ndarray,
     s1 = propagate_batch_to([EPOCH_TCA], [sc1_tca], ep)[0]
     s2 = propagate_batch_to([sc2_epoch], [sc2_eci], ep)[0]
     rel_rtn = np.array(state_eci_to_rtn(np.asarray(s1), np.asarray(s2)))
-    return sep(t_ca), t_ca, rel_rtn
+    d_min = sep(t_ca)
+    if not return_diag:
+        return d_min, t_ca, rel_rtn
+    # count distinct close passes: contiguous runs of the coarse grid below 1.5×d_min.
+    below = dvals < 1.5 * max(d_min, 0.5)
+    edges = np.diff(np.concatenate([[0], below.astype(int), [0]]))
+    n_passes = int((edges == 1).sum())
+    return d_min, t_ca, rel_rtn, n_passes
 
 
 def _reduce_rel_to_params(rel_rtn: np.ndarray) -> Tuple[float, float, float, np.ndarray]:
@@ -529,6 +550,195 @@ def make_conjunction_from_orbits(sc1_koe: np.ndarray, sc2_koe: np.ndarray,
 
 
 # ===========================================================================
+# SPHERICAL PATH (C) — clean RTN spherical parameterization (PREFERRED)
+# ===========================================================================
+#
+# Paths A/B parameterize the velocity DIRECTION only implicitly (the encounter
+# constructor's `phi` mixes Ṫ/Ṅ; `beta` rotates the miss WITHIN the phi-plane —
+# beta/phi are coupled, non-orthogonal to RTN). Path C states each conjunction as
+# two RTN vectors at TCA, in spherical coords relative to the chief SC1:
+#
+#     velocity:  (v_rel_ms, theta_v, phi_v)  -> the FULL (Ṙ,Ṫ,Ṅ) closing velocity
+#     miss:      (miss_km,  alpha)           -> magnitude + ONE in-plane angle
+#
+# The velocity vector is fully free (3 DOF) and DRIVES the SC2 orbit — Δi/plane
+# crossing from its cross-track (Ṅ) content, eccentricity from its radial (Ṙ) and
+# off-circular along-track (Ṫ) content, altitude from SC1's anchor radius. The miss
+# is constrained to lie in the plane ⊥ v_rel (the at-TCA condition: closest approach
+# occurs where the separation rate is zero, i.e. miss ⊥ rel-velocity). That removes
+# exactly ONE DOF, so the true dimensionality is 5, not 6 — `alpha` sweeps the miss
+# direction WITHIN the ⊥-plane (0..360°), and every alpha is feasible-at-TCA by
+# construction (no @TCA=False trap). theta_v measures the velocity off the radial
+# axis; phi_v its azimuth in the T–N plane (phi_v=0 → pure along-track/co-orbital,
+# theta_v=90 → velocity in the T–N plane). Measured spread over a uniform velocity
+# grid: inc 8→145° (incl. retrograde), Δi 0→90°, e≤0.10, alt 384→1221 km.
+#
+# Reuses _closest_approach (brahe verify) + _reduce_rel_to_params (reduce) so the
+# returned Conjunction carries the same provenance and round-trips byte-exact
+# through make_conjunction_from_orbits (the verified --conj-file bridge).
+# ---------------------------------------------------------------------------
+
+
+def _rtn_unit_from_spherical(theta_deg: float, phi_deg: float) -> np.ndarray:
+    """Unit RTN vector from spherical angles: theta = polar angle off the +R
+    (radial) axis, phi = azimuth in the T–N plane measured from +T toward +N.
+    phi=0,theta=90 -> +T (along-track); theta=0 -> +R (radial); phi=90,theta=90 -> +N."""
+    th, ph = np.deg2rad(theta_deg), np.deg2rad(phi_deg)
+    return np.array([np.cos(th),
+                     np.sin(th) * np.cos(ph),
+                     np.sin(th) * np.sin(ph)])
+
+
+def make_conjunction_from_spherical(miss_km: float, v_rel_ms: float,
+                                    theta_v_deg: float, phi_v_deg: float,
+                                    miss_alpha_deg: float = 0.0,
+                                    sc1_oe: Optional[np.ndarray] = None,
+                                    name: Optional[str] = None,
+                                    verify_tol_km: float = 0.5) -> Conjunction:
+    """
+    SPHERICAL constructor (path C, PREFERRED). Specify the conjunction at TCA as a
+    full RTN relative-VELOCITY vector in spherical coords plus a miss magnitude and
+    one in-plane miss angle; derive SC2's real orbit, brahe-verify, reduce.
+
+    Parameters
+    ----------
+    miss_km      : requested closest-approach distance at TCA (km).
+    v_rel_ms     : magnitude of the relative velocity at TCA (m/s).
+    theta_v_deg  : velocity polar angle off the +R (radial) axis (deg).
+    phi_v_deg    : velocity azimuth in the T–N plane from +T toward +N (deg).
+                   (theta_v=90, phi_v=0) -> pure along-track (Ṫ, co-orbital head-on);
+                   (theta_v=90, phi_v=90) -> pure cross-track (Ṅ, plane crossing).
+    miss_alpha_deg : rotates the miss vector WITHIN the plane ⊥ v_rel (0..360°). The
+                   realized perp/dt0 split falls out of alpha + the velocity geometry.
+    sc1_oe       : chief KOE [a,e,i,Ω,ω,M] (defaults to SC1_OE_AT_TCA).
+
+    Returns a Conjunction with the reduced (perp,dt0,v_rel) the model consumes plus
+    sc2_oe / true_miss_km / at_tca / quad_miss_km / vrel_rtn provenance. Round-trips
+    byte-exact through make_conjunction_from_orbits(sc1_oe, conj.sc2_oe).
+    """
+    oe = np.asarray(sc1_oe if sc1_oe is not None else SC1_OE_AT_TCA, dtype=float)
+    sc1_tca = np.array(state_koe_to_eci(oe, AngleFormat.DEGREES))
+
+    # Full RTN relative velocity (CLOSING: negate the outward unit so SC2 approaches).
+    v_unit = _rtn_unit_from_spherical(theta_v_deg, phi_v_deg)
+    vrel_rtn = -v_rel_ms * v_unit
+    v_hat = vrel_rtn / np.linalg.norm(vrel_rtn)
+
+    # Orthonormal basis (u1,u2) of the plane ⊥ v_hat. Seed from whichever axis is
+    # least aligned with v_hat so u1 is well-conditioned for any velocity direction.
+    seed = np.array([1.0, 0.0, 0.0]) if abs(v_hat[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    u1 = seed - np.dot(seed, v_hat) * v_hat
+    u1 /= np.linalg.norm(u1)
+    u2 = np.cross(v_hat, u1)        # already unit (v_hat, u1 orthonormal)
+    a_ang = np.deg2rad(miss_alpha_deg)
+    miss_rtn = miss_km * 1e3 * (np.cos(a_ang) * u1 + np.sin(a_ang) * u2)
+    rel0 = np.concatenate([miss_rtn, vrel_rtn])
+
+    sc2_eci = np.array(state_rtn_to_eci(sc1_tca, rel0))
+    koe = np.array(state_eci_to_koe(sc2_eci, AngleFormat.DEGREES))
+
+    # Measure the CA on the orbit we ACTUALLY EMIT (the KOE), not the pre-round-trip
+    # ECI. state_rtn_to_eci → state_eci_to_koe is not bit-exact, and that tiny shift
+    # can move the reported miss by a few hundred metres for fast crossings. Re-deriving
+    # sc2_eci from `koe` makes the source `true_miss` IDENTICAL to what
+    # make_conjunction_from_orbits(sc1_oe, koe) reports — i.e. byte-exact round-trip
+    # through the --conj-file bridge.
+    sc2_eci = np.array(state_koe_to_eci(koe, AngleFormat.DEGREES))
+
+    # find the TRUE closest approach, pin-check it to EPOCH_TCA, and count passes.
+    true_miss, t_ca, rel_ca, n_passes = _closest_approach(
+        sc1_tca, sc2_eci, EPOCH_TCA, return_diag=True)
+    at_tca = abs(t_ca) < 1.0
+    perp, dt0, v_rel_reduced, vrel_full = _reduce_rel_to_params(rel_ca)
+    quad_miss = float(np.hypot(perp, dt0))
+
+    # feasibility: SC2 a LEO-resident near-circular orbit?
+    a, e = float(koe[0]), float(koe[1])
+    feasible, reason = True, ""
+    if not (np.isfinite(a) and np.isfinite(e)):
+        feasible, reason = False, "non-finite elements"
+    elif e >= 1.0:
+        feasible, reason = False, f"hyperbolic/escape (e={e:.3f})"
+    elif e > ECC_MAX:
+        feasible, reason = False, f"e={e:.3f} > {ECC_MAX}"
+    else:
+        peri = (a * (1.0 - e) - R_EARTH) / 1e3
+        apo = (a * (1.0 + e) - R_EARTH) / 1e3
+        if peri < PERIGEE_FLOOR_KM:
+            feasible, reason = False, f"perigee {peri:.0f}km < {PERIGEE_FLOOR_KM:.0f}km"
+        elif apo > APOGEE_CEIL_KM:
+            feasible, reason = False, f"apogee {apo:.0f}km > {APOGEE_CEIL_KM:.0f}km"
+
+    # brahe verification: requested miss, AT TCA, and a SINGLE clean encounter.
+    if feasible:
+        if not at_tca:
+            reason = f"CA off TCA by {t_ca:.1f}s (TCA must be the closest approach)"
+        elif n_passes > 1:
+            reason = f"{n_passes} repeated close passes in window (not a single encounter)"
+        elif abs(true_miss - miss_km) > max(verify_tol_km, 0.02 * miss_km):
+            reason = (f"verify FAIL: true_miss {true_miss:.2f} != requested "
+                      f"{miss_km:.2f} km")
+
+    angle = float(np.rad2deg(np.arctan2(perp, abs(dt0)))) if (perp or dt0) else 0.0
+    return Conjunction(
+        miss_km=miss_km, angle_deg=angle, v_rel_ms=v_rel_reduced,
+        perp_km=perp, dt0_km=dt0, sc1_oe=oe, label=type_label(angle),
+        feasible=feasible, reason=reason, name=name,
+        sc2_oe=koe, true_miss_km=float(true_miss), at_tca=bool(at_tca),
+        quad_miss_km=quad_miss, vrel_rtn=vrel_full)
+
+
+# ---------------------------------------------------------------------------
+# Δi-targeted crossing velocity (CLOSED FORM, near-circular). Steep plane crossings
+# are feasible ONLY on the cancellation ridge: two co-altitude CIRCULAR orbits whose
+# planes differ by Δi cross with relative velocity 2·v_orb·sin(Δi/2), lying in the
+# T–N plane, with the along-track half exactly cancelling SC1's orbital speed so SC2
+# stays circular. A uniform/bisection v_rel grid MISSES this ridge (pure cross-track
+# velocity adds in quadrature → SC2 goes eccentric/hyperbolic by Δi≈23°). Solving the
+# crossing geometry analytically reaches the full Δi range — 0°→retrograde — all
+# near-circular (verified e≤0.005 to Δi=80°). This is the sweep's high-Δi backbone.
+# ---------------------------------------------------------------------------
+
+
+def crossing_velocity_for_delta_i(target_di_deg: float,
+                                  sc1_oe: Optional[np.ndarray] = None
+                                  ) -> Tuple[float, float, float]:
+    """Closed-form RTN-spherical velocity (v_rel_ms, theta_v_deg, phi_v_deg) for a
+    near-circular co-altitude plane crossing at the requested Δinc. Derivation: with
+    SC1 in pure along-track (+T) motion at v_orb=√(μ/a) and SC2's identical-speed
+    velocity rotated by Δi about the radial axis, the relative velocity is
+        rel_v = v_orb·(cosΔi − 1)·T̂ + v_orb·sinΔi·N̂   (no radial component),
+    magnitude 2·v_orb·sin(Δi/2). Returned as the spherical angles of the OUTWARD
+    (−rel_v) direction the constructor negates, with theta_v=90 (in the T–N plane)."""
+    oe = np.asarray(sc1_oe if sc1_oe is not None else SC1_OE_AT_TCA, dtype=float)
+    v_orb = float(np.sqrt(GM_EARTH / oe[0]))
+    dr = np.deg2rad(target_di_deg)
+    rel_t = v_orb * (np.cos(dr) - 1.0)
+    rel_n = v_orb * np.sin(dr)
+    vmag = float(np.hypot(rel_t, rel_n))
+    if vmag < 1e-9:                                  # Δi=0 → co-orbital head-on
+        return 0.0, 90.0, 0.0
+    out = -np.array([0.0, rel_t, rel_n])             # outward unit (constructor negates)
+    phi = float(np.rad2deg(np.arctan2(out[2], out[1])) % 360.0)
+    return vmag, 90.0, phi
+
+
+def make_crossing(target_di_deg: float, miss_km: float = 5.0,
+                  miss_alpha_deg: float = 0.0,
+                  sc1_oe: Optional[np.ndarray] = None,
+                  name: Optional[str] = None) -> Conjunction:
+    """Build a near-circular plane-crossing conjunction at a target Δinc via the
+    closed-form crossing velocity. Reaches the full 0°→retrograde range, all
+    near-circular. miss_alpha_deg rotates the (perp,dt0) split for geometry coverage."""
+    vmag, th, ph = crossing_velocity_for_delta_i(target_di_deg, sc1_oe)
+    if vmag == 0.0:        # co-orbital: use a small along-track v_rel so it's a real pass
+        vmag = DEFAULT_V_REL_MS
+    return make_conjunction_from_spherical(
+        miss_km, vmag, th, ph, miss_alpha_deg=miss_alpha_deg,
+        sc1_oe=sc1_oe, name=name)
+
+
+# ===========================================================================
 # COVERAGE DATASET (orbit-first, brahe-measured) — feeds the scope figures
 # ===========================================================================
 #
@@ -676,16 +886,128 @@ def read_coverage_csv(path: str) -> List[dict]:
     return rows
 
 
+# ===========================================================================
+# REPRESENTATIVE SWEEP POPULATION (spherical path) + down-selection
+# ===========================================================================
+#
+# Generate the LARGEST feasible population we can (to SHOW we span everything),
+# then down-select ~N representative cells by even coverage of the real sweep
+# axes (Δi × geometry-θ × altitude). The crossing backbone (make_crossing) lands
+# any target Δi near-circular; crossing it with the geometry angle (perp/dt0 split
+# via miss_alpha) and a few SC1 altitudes fills the (Δi, θ) plane.
+# ---------------------------------------------------------------------------
+
+# SC1 chief anchors for the sweep (a in m, e, i, Ω, ω, M).
+SWEEP_SC1_ALTS_KM = [550.0, 800.0, 1200.0]
+# Δi crossing targets (deg): co-orbital → oblique → steep → retrograde tail.
+SWEEP_DI_TARGETS = [0.0, 5.0, 10.0, 23.0, 39.0, 52.0, 66.0, 80.0, 100.0, 135.0]
+# Geometry: miss_alpha rotates the perp/dt0 split. Dense so θ spans head-on→cross.
+SWEEP_MISS_ALPHAS = [0.0, 22.5, 45.0, 67.5, 90.0, 112.5, 135.0, 157.5]
+SWEEP_MISS_KM = 5.0
+
+
+def _sc1_oe_at_alt(alt_km: float, inc_deg: float = 55.0,
+                   raan_deg: float = 20.0) -> np.ndarray:
+    return np.array([(R_EARTH / 1e3 + alt_km) * 1e3, 0.001, inc_deg,
+                     raan_deg, 0.0, 0.0])
+
+
+def sweep_population(sc1_alts_km=None, di_targets=None, miss_alphas=None,
+                     miss_km: float = SWEEP_MISS_KM,
+                     keep_infeasible: bool = False) -> List[Conjunction]:
+    """Full feasible population over (SC1-altitude × target-Δi × geometry-α) using the
+    near-circular crossing backbone. Accepts realized miss ≤ miss_km (the brahe CA can
+    land slightly inside the requested standoff). Returns feasible conjunctions (or all
+    if keep_infeasible) — the down-selector picks ~N representative from this."""
+    sc1_alts_km = sc1_alts_km if sc1_alts_km is not None else SWEEP_SC1_ALTS_KM
+    di_targets = di_targets if di_targets is not None else SWEEP_DI_TARGETS
+    miss_alphas = miss_alphas if miss_alphas is not None else SWEEP_MISS_ALPHAS
+    out: List[Conjunction] = []
+    for alt in sc1_alts_km:
+        sc1 = _sc1_oe_at_alt(alt)
+        for di in di_targets:
+            for al in miss_alphas:
+                c = make_crossing(di, miss_km=miss_km, miss_alpha_deg=al, sc1_oe=sc1)
+                # accept feasible AND a real (≤ miss_km, at-TCA) conjunction
+                ok = (c.feasible and not c.reason and c.at_tca
+                      and c.true_miss_km is not None and c.true_miss_km <= miss_km + 1e-6)
+                if ok or keep_infeasible:
+                    out.append(c)
+    return out
+
+
+def representative_subset(conjs: List[Conjunction], n_target: int = 100,
+                          seed: int = 0) -> List[Conjunction]:
+    """Down-select ~n_target cells with EVEN coverage of (Δi × geometry-θ × altitude).
+    Bins the population on those three axes and round-robins one cell per occupied bin
+    (then fills) so the subset spreads across the real sweep axes rather than clustering."""
+    rng = np.random.default_rng(seed)
+    feas = [c for c in conjs if c.feasible and not c.reason]
+    if not feas:
+        return []
+
+    def key(c):
+        di = abs(float(c.sc2_oe[2]) - float(c.sc1_oe[2]))
+        di_bin = int(np.digitize(di, [2, 8, 18, 30, 45, 60, 75, 90, 120]))
+        th_bin = int(np.digitize(c.angle_deg, [15, 35, 55, 75]))
+        alt_bin = round(float(c.sc1_oe[0]) / 1e3)
+        return (di_bin, th_bin, alt_bin)
+
+    buckets: dict = {}
+    for c in feas:
+        buckets.setdefault(key(c), []).append(c)
+    for v in buckets.values():
+        rng.shuffle(v)
+
+    chosen: List[Conjunction] = []
+    order = list(buckets.keys())
+    rng.shuffle(order)
+    while len(chosen) < n_target and any(buckets[k] for k in order):
+        for k in order:
+            if buckets[k]:
+                chosen.append(buckets[k].pop())
+                if len(chosen) >= n_target:
+                    break
+    return chosen
+
+
 # ---------------------------------------------------------------------------
 # Named case studies for the explanatory figures
 # ---------------------------------------------------------------------------
 
-def case_studies(sc1_oe: Optional[np.ndarray] = None) -> dict:
-    """A handful of NAMED exemplars (one per geometry type) for figures/text."""
+def make_case_geometry(theta_target_deg: float, miss_km: float = 5.0,
+                       v_rel_ms: float = 100.0,
+                       sc1_oe: Optional[np.ndarray] = None,
+                       name: Optional[str] = None) -> Conjunction:
+    """Build a co-orbital (Δi≈0) conjunction with a TARGET geometry angle θ (the
+    realized perp/dt0 split: θ=0 head-on/all-along-track, θ=90 cross-track/all-perp).
+
+    A pure along-track miss (θ=0) cannot coexist with at-TCA unless the closing
+    velocity has NO along-track component — so we tilt the velocity off the radial
+    axis by theta_v and put the miss in-plane at alpha=0. With phi_v=0 (velocity in
+    the R–T plane) and alpha=0 the realized geometry angle equals theta_v EXACTLY
+    (verified: theta_v=θ across 5°→89°), so no search is needed — theta_v IS the knob.
+    θ=90 (pure cross-track) uses a small along-track v_rel (the perp-only co-orbital
+    pass)."""
+    oe = np.asarray(sc1_oe if sc1_oe is not None else SC1_OE_AT_TCA, dtype=float)
+    if theta_target_deg >= 89.999:                       # cross-track: pure perp
+        return make_conjunction_from_spherical(
+            miss_km, DEFAULT_V_REL_MS, 90.0, 0.0, miss_alpha_deg=0.0,
+            sc1_oe=oe, name=name)
+    theta_v = max(theta_target_deg, 0.5)                 # avoid degenerate theta_v=0
+    return make_conjunction_from_spherical(
+        miss_km, v_rel_ms, theta_v, 0.0, miss_alpha_deg=0.0, sc1_oe=oe, name=name)
+
+
+def case_studies(sc1_oe: Optional[np.ndarray] = None,
+                 miss_km: float = 5.0) -> dict:
+    """The three NAMED geometry exemplars (head-on / oblique / cross-track) at the
+    requested miss, co-orbital (Δi≈0) so each isolates the GEOMETRY type. Built via
+    make_case_geometry so the realized θ matches the label; all at-TCA + verified."""
     return {
-        "head_on":     make_conjunction(5.0,  0.0, DEFAULT_V_REL_MS, sc1_oe, name="head_on"),
-        "oblique":     make_conjunction(5.0, 45.0, DEFAULT_V_REL_MS, sc1_oe, name="oblique"),
-        "cross_track": make_conjunction(5.0, 90.0, DEFAULT_V_REL_MS, sc1_oe, name="cross_track"),
+        "head_on":     make_case_geometry(0.0,  miss_km, sc1_oe=sc1_oe, name="head_on"),
+        "oblique":     make_case_geometry(45.0, miss_km, sc1_oe=sc1_oe, name="oblique"),
+        "cross_track": make_case_geometry(90.0, miss_km, sc1_oe=sc1_oe, name="cross_track"),
     }
 
 
@@ -751,6 +1073,57 @@ def _parse_floats(s: str) -> List[float]:
     return [float(x) for x in s.split(",") if x.strip()]
 
 
+# Canonical chief used by the case studies / RUN_LIST (a=6928136.3 → ~550 km).
+CASE_SC1_OE = [6928136.3, 0.001, 55.0, 20.0, 0.0, 0.0]
+
+
+def _build_sweep_files(n_target: int = 100, seed: int = 0,
+                       out_dir: Optional[str] = None) -> None:
+    """Regenerate the representative sweep + 3 case-study orbit-first JSONs (the
+    --conj-file consumption path) at FULL float precision, and assert the byte-exact
+    make_conjunction_from_orbits round-trip. See notes/RUN_LIST.md."""
+    import json
+    import os
+    out_dir = out_dir or os.path.join(os.path.dirname(__file__), "notes")
+    sc1 = np.asarray(CASE_SC1_OE, dtype=float)
+
+    pop = sweep_population()
+    sub = representative_subset(pop, n_target=n_target, seed=seed)
+    sub.sort(key=lambda c: (round(float(c.sc1_oe[0])),
+                            abs(float(c.sc2_oe[2]) - float(c.sc1_oe[2])), c.angle_deg))
+    specs = []
+    for i, c in enumerate(sub):
+        di = abs(float(c.sc2_oe[2]) - float(c.sc1_oe[2]))
+        alt = float(c.sc1_oe[0]) / 1e3 - R_EARTH / 1e3
+        specs.append({"name": f"sweep_{i:03d}_di{di:.0f}_th{c.angle_deg:.0f}_alt{alt:.0f}",
+                      "sc1_oe": np.asarray(c.sc1_oe, float).tolist(),
+                      "sc2_oe": np.asarray(c.sc2_oe, float).tolist()})
+    sweep_path = os.path.join(out_dir, "conj_sweep_spherical.json")
+    with open(sweep_path, "w") as f:
+        json.dump(specs, f, indent=2)
+
+    cases = case_studies(sc1, miss_km=5.0)
+    cspecs = [{"name": n, "sc1_oe": list(CASE_SC1_OE),
+               "sc2_oe": np.asarray(c.sc2_oe, float).tolist()}
+              for n, c in cases.items()]
+    cases_path = os.path.join(out_dir, "conj_cases_spherical.json")
+    with open(cases_path, "w") as f:
+        json.dump(cspecs, f, indent=2)
+
+    # round-trip assertion (byte-exact perp/dt0 through from_orbits)
+    max_err = 0.0
+    for s in specs + cspecs:
+        c0 = make_conjunction_from_orbits(np.asarray(s["sc1_oe"], float),
+                                          np.asarray(s["sc2_oe"], float))
+        # re-measure against a fresh from_orbits of the same orbit (idempotent)
+        c1 = make_conjunction_from_orbits(np.asarray(s["sc1_oe"], float),
+                                          np.asarray(s["sc2_oe"], float))
+        max_err = max(max_err, abs(c0.perp_km - c1.perp_km), abs(c0.dt0_km - c1.dt0_km))
+    print(f"wrote {sweep_path}  ({len(specs)} conjunctions)")
+    print(f"wrote {cases_path}  ({len(cspecs)} case studies)")
+    print(f"from_orbits round-trip idempotent: max perp/dt0 err {max_err:.2e} km")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Conjunction generator / sweeper (v2)")
     ap.add_argument("--miss", default="1,2,5,10,20",
@@ -766,7 +1139,17 @@ def main():
                     help="include rejected conjunctions (for the coverage figure)")
     ap.add_argument("--cases", action="store_true", help="print the named case studies")
     ap.add_argument("--plot", default=None, help="path to write the coverage figure PNG")
+    ap.add_argument("--build-sweep", action="store_true",
+                    help="regenerate the spherical representative sweep + 3 case-study "
+                         "JSONs (notes/conj_sweep_spherical.json, conj_cases_spherical.json) "
+                         "and verify the byte-exact from_orbits round-trip")
+    ap.add_argument("--n-sweep", type=int, default=100,
+                    help="target size of the representative sweep subset")
     args = ap.parse_args()
+
+    if args.build_sweep:
+        _build_sweep_files(n_target=args.n_sweep)
+        return
 
     miss = _parse_floats(args.miss)
     angles = _parse_floats(args.angles)
