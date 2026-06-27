@@ -53,6 +53,26 @@ $V $CA/main.py 'contacts.stages=[1,9,13,15]'              # SDec contact subset 
 $V $CA/main.py run.rollout=true run.rollouts=200          # also brahe-validate the policy
 ```
 
+### Add the B1 operator floor (the brahe-MC comparison baseline)
+
+`baseline.enabled=true` runs the **B1 operator-heuristic floor** alongside the POMDP solve —
+a separate hand-coded per-craft heuristic (NO solver), reusing `baseline_b1.py` through the
+same brahe engine. It is **additive and off by default** (the anchor is POMDP-only). B1 and the
+POMDP are independent policy sets, so you can run either, both, or neither:
+
+```bash
+$V $CA/main.py baseline.enabled=true run.rollout=true     # POMDP + B1, both flown through brahe
+$V $CA/main.py 'solve.variants=[]' baseline.enabled=true  # baseline-ONLY (skip the POMDP solve)
+$V $CA/main.py baseline.enabled=true baseline.strategy=firereturn baseline.other_obs=frozen
+```
+
+B1 writes its per-rollout CSV to `notes/results/b1_<run.tag>.csv` and prints the SAME 4-7km band
+stats (collision% / in-band / miss / dV / burns) as the POMDP brahe rollout — so the comparison
+is brahe-MC vs brahe-MC on one axis (turn on `run.rollout=true` to get the POMDP side too). The
+in-process result is byte-identical to the standalone `baseline_b1.py --mode mc`. All knobs
+(`baseline.strategy/policy/selfish_model/other_obs/tle_sigma/variant/rollouts/seed`) are in
+`conf/config.yaml`; see `notes/SCENARIO_KNOBS.md`.
+
 Outputs land in `notes/results/variant_*_<run.tag>.csv` (figures in `notes/figures/` if
 `run.figures=true`). Regenerate figures from a CSV without re-solving:
 `$V $CA/replot_from_csv.py --tag <tag>`.
@@ -84,8 +104,40 @@ $V $CA/main.py wandb.enabled=true wandb.project=spacecraftCA run.tag=exp1
 $V $CA/main.py wandb.enabled=true wandb.mode=offline run.tag=exp1
 ```
 
-wandb logs the fully-resolved config dict + per-variant headline metrics
-(expected_return / collision_prob / dv_ms / syncs). The CSVs are still written regardless.
+wandb logs the fully-resolved config dict, a set of **summary scalars** (the sweep AXES, so runs
+group/sort in the UI), and **six tables** — one per figure, so every paper figure is reproducible
+PURELY from the wandb run (the CSVs are still the source of truth).
+
+Summary scalars: `n_stages`, `n_contacts`, `contact_stages`, `init_miss`, `init_spread`, `perp`,
+`propagator`, `man_cost`, `disp_k`, `flagged`, `eff_miss`.
+
+Tables (kept on separate axes so nothing is apples-to-oranges):
+- `variant_summary` — POMDP **matrix-expectation** (expected_return / collision_prob / dv_ms /
+  syncs). Solved variants only.
+- `reward_parts` — per-variant maneuver / deviation / risk / displace → reward-decomposition figure.
+- `burn_timing` — per-variant per-stage mean agent burns → burn-timing figure.
+- `action_schedule` — per-variant per-stage dominant joint action + prob → policy figure.
+- `brahe_summary` — **brahe-MC** band stats + maneuvers + fidelity (collision% / in-band% / miss /
+  dV / burns / ≤2-burn% / term-reward-gap / dt-err) for every policy actually flown: POMDP variants
+  under `run.rollout=true` AND B1 under `baseline.enabled=true`, on ONE axis = the direct compare.
+- `brahe_rollouts` — per-rollout brahe/matrix miss + dV + burns + terminal rewards + dt-err →
+  the histogram / fuel-distribution / model-fidelity figures (re-plottable from the table).
+
+### Plot every figure FROM a wandb run
+
+`plot_from_wandb.py` is the wandb twin of `replot_from_csv.py`: it pulls the logged tables and
+feeds them to the SAME plot functions, so the figures are byte-for-byte the CSV ones (the tables
+carry the full row dicts). Works on a local run dir (offline) or a remote run id (`wandb.Api`):
+
+```bash
+$V $CA/plot_from_wandb.py --run kmeans_gsopt/spacecraftCA/<run_id>   # remote, via API
+$V $CA/plot_from_wandb.py --run <run_id>                             # local: searched under ./wandb
+$V $CA/plot_from_wandb.py --run wandb/run-<ts>-<id> --tag myfig      # explicit local dir
+```
+
+Renders summary / reward_parts / burn_timing / action_schedule and a per-policy START/END miss
+histogram (centralized / sdec / B1) into `notes/figures/`. (CSV path unchanged:
+`$V $CA/replot_from_csv.py --tag <tag>`.)
 
 ---
 
