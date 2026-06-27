@@ -98,6 +98,15 @@ solve:
                                #   speedup). false (default) => anchor byte-identical.
   sdec_iter_limit: 2000        # SDec/Cen RS-SDA* TI2 pruning budget. Default 2000 == the anchor
                                #   value; lower => harder progress-pruning for graded-obs solves.
+  sdec_ti1: false              # SDec/Cen RS-SDA* TI1 interleaving (prefix policy + MPC re-solve at
+                               #   syncs; the paper's stochastic-obs technique). false (default) =>
+                               #   one-shot full policy, anchor byte-identical. true => routes to the
+                               #   interleaved evaluator (expected_interleaved_return_v2).
+  sdec_max_clusters: 20        # SDec/Cen RS-SDA* TI4 belief-cluster cap (anchors kept per sync).
+                               #   20 (default) == anchor. LOWER caps the post-sync belief fan-out for
+                               #   graded (TLE) obs; but too low collapses the noise (degenerate ~=
+                               #   perfect) AND (measured 2026-06-26) is pathologically SLOW on full-res
+                               #   -- sigma is the real fan-out lever, not this.
 
 # -----------------------------------------------------------------------------
 # RUN — runner/output (NOT scenario fields; steer the runner, not the model).

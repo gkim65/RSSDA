@@ -63,14 +63,23 @@ def build_config_fixed():
     # fixed-mode (TI1=False) to match the v1 -22.41 setup. Graded-obs speed knobs ride on the
     # applied Scenario (solve.sdec_tail_qmdp / solve.sdec_iter_limit); both default to the anchor
     # values so an unset config is byte-identical to the -7.83 reference.
-    cfg = build_config(exact=False, ti1_enabled=False)
+    cfg = build_config(exact=False, ti1_enabled=bool(getattr(_SCENARIO, "sdec_ti1", False)))
     if getattr(_SCENARIO, "sdec_tail_qmdp", False):
         cfg.tail_heuristic_type = "QMDP"
         cfg.rec_limit = 1
     _il = getattr(_SCENARIO, "sdec_iter_limit", None)
     if _il is not None:
         cfg.iter_limit = int(_il)
+    _mc = getattr(_SCENARIO, "sdec_max_clusters", None)
+    if _mc is not None:
+        cfg.max_clusters = int(_mc)   # TI4 cap; 20 == anchor, lower => prune graded-obs fan-out
+    if os.environ.get("SPACECRAFT_VERBOSE_ASTAR"):
+        cfg.output = True             # print per-iter [A*] iter=/value=/best=/depth lines (diagnostic only)
     return cfg
+
+
+def _sdec_ti1_on():
+    return bool(getattr(_SCENARIO, "sdec_ti1", False))
 
 
 def v2_model(T, O, R, init_b, sync_stages):
@@ -328,6 +337,146 @@ def expected_return_from_policy(T, O, R, sdec, full_result, init_b, obs_agent_si
     return expected_return, coll_prob, stage_any_burns, comp, term_dt, act_mass
 
 
+def expected_interleaved_return_v2(T, O, R, sdec, full_result, init_b, obs_agent_size,
+                                   sync_stages, prune=1e-12):
+    """v2 MPC/interleaved evaluator. Port of compare_variants.expected_interleaved_policy_metrics
+    onto v2 dims + v2 reward decomposition. A TI1 solve may return a PREFIX policy: this walks
+    the belief tree executing the current plan until the next sync stage, then RE-SOLVES a fresh
+    RS-SDA* subproblem from the updated shared belief over the remaining horizon (receding-horizon
+    MPC). Returns the SAME 6-tuple shape as expected_return_from_policy, so the downstream
+    CSV/figure path is byte-identical -- AND, with TI1=False (the solver returns a complete plan),
+    no re-solve ever fires, so this reproduces expected_return_from_policy exactly (the anchor
+    equivalence check).
+
+    Node = (true_state, belief_idx, oh0, oh1, plan_stage, plan_belief, local_step):
+      - stage     = ABSOLUTE stage (from index_to_state) -> reward attribution + sync detection.
+      - plan_stage/plan_belief = which cached plan this node is following.
+      - local_step = position WITHIN that plan (the index into policy/cen_dists_map). Decoupled
+        from stage because a plan re-solved at stage k starts its own local_step at 0.
+    Extra solve-seconds from re-solves are NOT returned here (timing is captured by the caller via
+    wall-clock); this function returns the same metric tuple as the one-shot evaluator."""
+    from spacecraft_simulator import get_rssda_action, update_oh_rssda
+    from collections import defaultdict
+    import time as _time
+
+    root_belief = sdec.dist_dict[int_tuple(sdec.init_beliefs)]
+    plan_cache = {(0, root_belief): full_result}
+    resolve_count = [0]
+    resolve_seconds = [0.0]
+
+    def get_plan(plan_stage, plan_belief):
+        key = (plan_stage, plan_belief)
+        plan = plan_cache.get(key)
+        if plan is None:
+            horizon = max(0, D.N_STAGES - plan_stage)
+            t0 = _time.perf_counter()
+            plan = sdec.multi_agent_astar(horizon, init_beliefs=plan_belief)
+            resolve_seconds[0] += _time.perf_counter() - t0
+            resolve_count[0] += 1
+            plan_cache[key] = plan
+        return plan
+
+    expected_return = 0.0
+    coll_prob = 0.0
+    stage_any_burns = np.zeros(D.N_STAGES)
+    comp = defaultdict(float)
+    term_dt = defaultdict(float)
+    act_mass = defaultdict(float)
+
+    support = [(int(s), init_b[s]) for s in np.flatnonzero(init_b)]
+    for root_state, root_p in support:
+        # node tuple carries plan context: start on the root plan at local_step 0.
+        nodes = {(root_state, root_belief, 0, 0, 0, root_belief, 0): root_p}
+        for step in range(D.N_STAGES):
+            next_nodes = defaultdict(float)
+            for (true_state, belief_idx, oh0, oh1, plan_stage, plan_belief, local_step), mass in nodes.items():
+                if mass <= prune or true_state == D.SINK_STATE:
+                    continue
+                dt_bin, v1b, v2b, stage = D.index_to_state(true_state)
+
+                value, policy, clustering, cent_vector, cen_dists_map, clustering_cen = get_plan(
+                    plan_stage, plan_belief)
+
+                # MPC re-plan trigger: re-solve ONLY when the current plan has run OUT at this node
+                # (TI1 returned a PREFIX and local_step is past its end) AND we're at a sync stage
+                # (the shared belief just refreshed, so a fresh subproblem is well-posed). With a
+                # COMPLETE policy (TI1=False) local_step never exceeds the plan -> no re-solve fires,
+                # so this reduces to the one-shot walk exactly (the anchor equivalence).
+                if local_step >= len(policy) and stage in sync_stages:
+                    plan_stage, plan_belief, local_step = stage, belief_idx, 0
+                    oh0, oh1 = 0, 0
+                    value, policy, clustering, cent_vector, cen_dists_map, clustering_cen = get_plan(
+                        plan_stage, plan_belief)
+
+                joint_act, a1, a2, is_cen = get_rssda_action(
+                    policy, cen_dists_map, clustering, clustering_cen,
+                    local_step, belief_idx, [oh0, oh1], TV.N_ACT_AGENT)
+                if joint_act < 0:
+                    joint_act, a1, a2 = 0, 0, 0
+                b1, b2 = joint_act % TV.N_ACT_AGENT, joint_act // TV.N_ACT_AGENT
+
+                expected_return += mass * float(R[joint_act, true_state])
+                act_mass[(stage, int(joint_act))] += mass
+                comp["maneuver"] += mass * TV.REWARD_MANEUVER * ((b1 != 0) + (b2 != 0))
+                comp["deviation"] += mass * TV.REWARD_DEVIATION * (
+                    (v1b != D.VDEV_ZERO) + (v2b != D.VDEV_ZERO))
+                if (b1 != 0 or b2 != 0):
+                    stage_any_burns[stage] += mass
+                if stage == D.N_STAGES - 1:
+                    dt_c = D.dt_bin_center_km(dt_bin)
+                    miss = D.miss_km_from_dt(dt_c, PERP_KM)
+                    comp["risk"] += mass * TV.risk_ramp_reward(miss)
+                    comp["displace"] += mass * TV.displacement_cost(dt_c)
+                    term_dt[dt_bin] += mass
+                    if miss < D.COLLISION_THRESHOLD_KM:
+                        coll_prob += mass
+
+                c_ptr = -1
+                if is_cen and local_step < len(cen_dists_map):
+                    dm = cen_dists_map[local_step]
+                    if belief_idx in dm:
+                        c_ptr = dm.index(belief_idx)
+                nzT = np.flatnonzero(T[joint_act, true_state, :] > prune)
+                try:
+                    obs_to_belief = {int(o): int(d) for o, _, d in
+                                     sdec.get_terminal(belief_idx, joint_act)}
+                except KeyError:
+                    obs_to_belief = {}
+                for sp in nzT:
+                    bm = mass * float(T[joint_act, true_state, sp])
+                    if bm <= prune:
+                        continue
+                    if sp == D.SINK_STATE:
+                        next_nodes[(int(sp), belief_idx, oh0, oh1,
+                                    plan_stage, plan_belief, local_step + 1)] += bm
+                        continue
+                    nzO = np.flatnonzero(O[joint_act, sp, :] > prune)
+                    for obs in nzO:
+                        om = bm * float(O[joint_act, sp, obs])
+                        if om <= prune:
+                            continue
+                        nb = obs_to_belief.get(int(obs), belief_idx)
+                        # Keep FOLLOWING the current plan: advance obs-history and local_step. We do
+                        # NOT retarget at every sync -- a COMPLETE policy already encodes the sync's
+                        # information in its obs-history branches, so following it = the one-shot walk
+                        # (zero re-solves, anchor-exact). Re-solving only happens at the TOP of the
+                        # loop when a TI1 PREFIX has run out (local_step >= len(policy)) at a sync.
+                        o1 = int(obs) % obs_agent_size
+                        o2 = int(obs) // obs_agent_size
+                        n0, n1 = update_oh_rssda(policy, cen_dists_map, clustering,
+                                                 clustering_cen, local_step, nb, [oh0, oh1],
+                                                 is_cen, c_ptr, o1, o2)
+                        next_nodes[(int(sp), nb, n0, n1,
+                                    plan_stage, plan_belief, local_step + 1)] += om
+            nodes = {n: p for n, p in next_nodes.items()
+                     if p > prune and n[0] != D.SINK_STATE}
+
+    if resolve_count[0]:
+        print(f"  [interleaved] MPC re-solves: {resolve_count[0]} "
+              f"({resolve_seconds[0]:.1f}s in re-solves)")
+    return expected_return, coll_prob, stage_any_burns, comp, term_dt, act_mass
+
+
 PERP_KM = 0.0
 
 
@@ -391,8 +540,13 @@ def solve_and_eval(variant, init_b, rsmaa=False, rsmaa_cfg=None, matrices=None):
     model = v2_model(T, O, R, init_b, cs)
     sdec = SDecPOMDP(model=model, config=build_config_fixed())
     full = sdec.multi_agent_astar(D.N_STAGES)
-    er, cp, burns, comp, term_dt, act_mass = expected_return_from_policy(
-        T, O, R, sdec, full, init_b, obs_agent_size)
+    if _sdec_ti1_on():
+        # TI1 may return a PREFIX policy -> the interleaved MPC evaluator re-solves at syncs.
+        er, cp, burns, comp, term_dt, act_mass = expected_interleaved_return_v2(
+            T, O, R, sdec, full, init_b, obs_agent_size, cs)
+    else:
+        er, cp, burns, comp, term_dt, act_mass = expected_return_from_policy(
+            T, O, R, sdec, full, init_b, obs_agent_size)
     return er, cp, burns, comp, term_dt, act_mass, None
 
 
@@ -468,6 +622,9 @@ def main():
     ap.add_argument("--sdec-iter-limit", type=int, default=None,
                     help="SDec/Cen RS-SDA* TI2 pruning budget (cfg.solve.sdec_iter_limit; "
                          "default 2000 == anchor).")
+    ap.add_argument("--sdec-max-clusters", type=int, default=None,
+                    help="SDec/Cen RS-SDA* TI4 belief-cluster cap (cfg.solve.sdec_max_clusters; "
+                         "default 20 == anchor; lower caps graded-obs fan-out -> tractable).")
     ap.add_argument("--hour-grid", default=None,
                     help="base decision cadence, comma hours-before-TCA desc "
                          "(cfg.grid.hour_grid_h; default ~2h).")
