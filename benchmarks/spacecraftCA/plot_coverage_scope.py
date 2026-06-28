@@ -34,7 +34,9 @@ import conjunction_generator as G
 from spacecraft_matrices import SC1_OE_AT_TCA, EPOCH_TCA, propagate_batch_to
 
 R_E_KM = R_EARTH / 1e3
-FIG_DIR = "notes/figures"
+# Absolute (anchored at this file) so figures land next to this script regardless of cwd
+# (running from the repo root previously wrote to ./notes/figures/ at the root).
+FIG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "notes", "figures")
 CSV_PATH = "notes/scratch/coverage_grid.csv"
 
 # Feasibility box (mirrors the generator guards) in (a-altitude, e) and peri/apo.
@@ -661,7 +663,10 @@ def fig_continuous(out_path):
 # representative sweep as the final row. Same orbit-ellipse style as Figure C.
 # ---------------------------------------------------------------------------
 
-SWEEP_JSON = os.path.join("notes", "conj_sweep_spherical.json")
+# Absolute (anchored at this file) so the figure renders from ANY cwd — including the
+# cluster — not just when run from inside benchmarks/spacecraftCA/.
+SWEEP_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          "notes", "conj_sweep_spherical.json")
 
 
 def _spherical_panel(axes, sweep_vals, build_fn, cmap_name, label, explain,

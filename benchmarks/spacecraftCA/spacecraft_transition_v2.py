@@ -47,6 +47,44 @@ N_DT_OBS     = D.N_DT + 1             # dt bins + null
 N_OBS_AGENT  = N_DT_OBS * D.N_VDEV    # local obs = (dt_obs_or_null, own vdev_bin)
 N_JOINT_OBS  = N_OBS_AGENT ** 2
 
+
+def recompute_obs_alphabet():
+    """Recompute the obs-alphabet sizes from the LIVE D.N_DT.
+
+    DT_NULL_OBS / N_DT_OBS / N_OBS_AGENT / N_JOINT_OBS are value-bindings captured at import from
+    D.N_DT. But D.N_DT is NOT fixed: build_T_O calls D.set_dt_edges_from_levers(), which regenerates
+    the dt grid for THIS conjunction's burn levers and can CHANGE N_DT (a different orbit/horizon/dV
+    => different lever set => different bin count). If the obs sizes stay frozen at the import-time
+    N_DT while the dt_bin loop ranges over the new (larger) D.N_DT, joint_obs_index overflows the
+    stale alphabet — the obs matrix O is allocated N_JOINT_OBS wide but indexed with the new N_DT
+    ("index 4378 out of bounds for axis 0 with size 4356"). Re-derive here; build_T_O calls this right
+    after set_dt_edges_from_levers so O is allocated at the correct width. When N_DT is unchanged this
+    is a no-op (anchor byte-identical)."""
+    global DT_NULL_OBS, N_DT_OBS, N_OBS_AGENT, N_JOINT_OBS
+    DT_NULL_OBS = D.N_DT
+    N_DT_OBS    = D.N_DT + 1
+    N_OBS_AGENT = N_DT_OBS * D.N_VDEV
+    N_JOINT_OBS = N_OBS_AGENT ** 2
+    return N_OBS_AGENT, N_JOINT_OBS
+
+
+def assert_obs_alphabet_consistent():
+    """Cheap fail-loud gate: the obs alphabet must agree with the LIVE discretizer dt grid AND the
+    stage grid. Catches the import-order / stale-binding desync class at solve time with a clear
+    message instead of an opaque IndexError minutes into a matrix build (see recompute_obs_alphabet).
+    Called at the top of build_T_O after the dt grid is regenerated."""
+    import spacecraft_stage_grid as SG
+    expect_agent = (D.N_DT + 1) * D.N_VDEV
+    if N_OBS_AGENT != expect_agent or N_JOINT_OBS != expect_agent ** 2:
+        raise RuntimeError(
+            f"obs alphabet desynced from D.N_DT={D.N_DT}: N_OBS_AGENT={N_OBS_AGENT} "
+            f"(expect {expect_agent}), N_JOINT_OBS={N_JOINT_OBS} (expect {expect_agent ** 2}). "
+            f"Call recompute_obs_alphabet() after any D.set_dt_edges_from_levers().")
+    if D.N_STAGES != SG.N_STAGES:
+        raise RuntimeError(
+            f"N_STAGES desynced: D.N_STAGES={D.N_STAGES} != SG.N_STAGES={SG.N_STAGES}. "
+            f"The discretizer was imported before the per-conjunction grid rebuild.")
+
 # Reward constants. (v1 used REWARD_MANEUVER=-10, but at -10/burn vs -1/deviation-stage
 # a single burn cost as much as 10 off-nominal stages, biasing the policy toward NOT
 # maneuvering. Lowered to -1 (2026-06-10 cont.) so the burn/deviation/risk tradeoff is
@@ -598,6 +636,13 @@ def build_T_O(rate_at: np.ndarray, variant: str, verbose: bool = False):
     # only on the (build-time) lever table, not on any trajectory.
     levers = [float(rate_at[k]) * stage_t2go_h(k) for k in range(N_STAGES)]
     D.set_dt_edges_from_levers(levers)
+
+    # set_dt_edges_from_levers may have CHANGED D.N_DT for this conjunction's lever set, so the
+    # obs-alphabet sizes (frozen at import from the OLD N_DT) must be re-derived BEFORE O is
+    # allocated below — otherwise O is sized for the stale alphabet and joint_obs_index overflows
+    # it (the 'index 4378 out of bounds size 4356' desync). No-op when N_DT is unchanged.
+    recompute_obs_alphabet()
+    assert_obs_alphabet_consistent()
 
     # Per-stage drift rate (rate_at[k]) instead of a single mean over all stages.
     # The gain table already measures the true rate at each stage; using it makes the

@@ -1077,28 +1077,66 @@ def _parse_floats(s: str) -> List[float]:
 CASE_SC1_OE = [6928136.3, 0.001, 55.0, 20.0, 0.0, 0.0]
 
 
+# Dense (Δi × θ) grid for the LARGE (~1000) sweep: ~3x the feasible population per miss
+# level (237 → ~747 @5km) so a 250/level down-select still has even coverage to pick from.
+# Same backbone (make_crossing), just finer Δi and geometry-α sampling.
+SWEEP_DI_TARGETS_DENSE = [0.0, 5.0, 10.0, 15.0, 23.0, 30.0, 39.0, 45.0, 52.0, 60.0,
+                          66.0, 73.0, 80.0, 90.0, 100.0, 115.0, 135.0]
+SWEEP_MISS_ALPHAS_DENSE = [0.0, 15.0, 22.5, 30.0, 45.0, 60.0, 67.5, 75.0, 90.0,
+                           105.0, 112.5, 120.0, 135.0, 150.0, 157.5]
+
+
 def _build_sweep_files(n_target: int = 100, seed: int = 0,
-                       out_dir: Optional[str] = None) -> None:
+                       out_dir: Optional[str] = None,
+                       miss_levels: Optional[List[float]] = None,
+                       dense: bool = False,
+                       sweep_filename: str = "conj_sweep_spherical.json") -> None:
     """Regenerate the representative sweep + 3 case-study orbit-first JSONs (the
     --conj-file consumption path) at FULL float precision, and assert the byte-exact
-    make_conjunction_from_orbits round-trip. See notes/RUN_LIST.md."""
+    make_conjunction_from_orbits round-trip. See notes/RUN_LIST.md.
+
+    miss_levels: if given (e.g. [1,2,5,10]), the representative subset is built at EACH
+    miss level and concatenated, so the sweep spans the MISS axis as well as Δi × θ ×
+    altitude. None => the single-miss default (SWEEP_MISS_KM = 5 km), byte-identical to
+    the committed sweep. Each conjunction's name carries its realized miss (_mNN) so the
+    sweep CSV groups by miss. The down-select is done PER miss level (n_target each) so
+    every miss gets even (Δi × θ × alt) coverage rather than one miss starving another.
+
+    dense: use the finer (Δi × θ) grid (SWEEP_*_DENSE) so the per-level feasible population
+    is large enough (~747 @5km) for a big n_target (e.g. 250/level → ~1000 total). Off =>
+    the default grid (~237/level, enough for ≤100/level).
+    sweep_filename: output filename for the sweep JSON (lets the ~400 and the ~1000 sweeps
+    live side by side, e.g. conj_sweep_spherical.json vs conj_sweep_spherical_1k.json)."""
     import json
     import os
     out_dir = out_dir or os.path.join(os.path.dirname(__file__), "notes")
     sc1 = np.asarray(CASE_SC1_OE, dtype=float)
 
-    pop = sweep_population()
-    sub = representative_subset(pop, n_target=n_target, seed=seed)
-    sub.sort(key=lambda c: (round(float(c.sc1_oe[0])),
-                            abs(float(c.sc2_oe[2]) - float(c.sc1_oe[2])), c.angle_deg))
+    di_targets = SWEEP_DI_TARGETS_DENSE if dense else None
+    miss_alphas = SWEEP_MISS_ALPHAS_DENSE if dense else None
+    levels = miss_levels if miss_levels else [SWEEP_MISS_KM]
+    sub = []
+    for mi, m in enumerate(levels):
+        pop_m = sweep_population(di_targets=di_targets, miss_alphas=miss_alphas, miss_km=m)
+        # seed offset per level so the per-level down-selects aren't identical draws
+        sub_m = representative_subset(pop_m, n_target=n_target, seed=seed + mi)
+        sub_m.sort(key=lambda c: (round(float(c.sc1_oe[0])),
+                                  abs(float(c.sc2_oe[2]) - float(c.sc1_oe[2])), c.angle_deg))
+        sub.append((m, sub_m))
+
     specs = []
-    for i, c in enumerate(sub):
-        di = abs(float(c.sc2_oe[2]) - float(c.sc1_oe[2]))
-        alt = float(c.sc1_oe[0]) / 1e3 - R_EARTH / 1e3
-        specs.append({"name": f"sweep_{i:03d}_di{di:.0f}_th{c.angle_deg:.0f}_alt{alt:.0f}",
-                      "sc1_oe": np.asarray(c.sc1_oe, float).tolist(),
-                      "sc2_oe": np.asarray(c.sc2_oe, float).tolist()})
-    sweep_path = os.path.join(out_dir, "conj_sweep_spherical.json")
+    idx = 0
+    for m, sub_m in sub:
+        for c in sub_m:
+            di = abs(float(c.sc2_oe[2]) - float(c.sc1_oe[2]))
+            alt = float(c.sc1_oe[0]) / 1e3 - R_EARTH / 1e3
+            mm = c.true_miss_km if c.true_miss_km is not None else m
+            specs.append({"name": f"sweep_{idx:03d}_di{di:.0f}_th{c.angle_deg:.0f}"
+                                  f"_alt{alt:.0f}_m{mm:.0f}",
+                          "sc1_oe": np.asarray(c.sc1_oe, float).tolist(),
+                          "sc2_oe": np.asarray(c.sc2_oe, float).tolist()})
+            idx += 1
+    sweep_path = os.path.join(out_dir, sweep_filename)
     with open(sweep_path, "w") as f:
         json.dump(specs, f, indent=2)
 
@@ -1144,11 +1182,25 @@ def main():
                          "JSONs (notes/conj_sweep_spherical.json, conj_cases_spherical.json) "
                          "and verify the byte-exact from_orbits round-trip")
     ap.add_argument("--n-sweep", type=int, default=100,
-                    help="target size of the representative sweep subset")
+                    help="target size of the representative sweep subset (PER miss level)")
+    ap.add_argument("--sweep-miss", default=None,
+                    help="comma list of miss magnitudes (km) for --build-sweep, e.g. "
+                         "'1,2,5,10'. The representative subset is rebuilt at EACH miss "
+                         "(n-sweep cells each) so the sweep spans miss as well as Δi×θ×alt. "
+                         "Omit => single 5 km (the committed default, byte-identical).")
+    ap.add_argument("--dense", action="store_true",
+                    help="use the finer (Δi×θ) grid so the feasible population per miss "
+                         "level is ~3x larger (~747 vs 237 @5km) — needed for a big "
+                         "--n-sweep (e.g. 250/level → ~1000 total).")
+    ap.add_argument("--sweep-filename", default="conj_sweep_spherical.json",
+                    help="output filename for the sweep JSON (under notes/). Use a distinct "
+                         "name for the large sweep, e.g. conj_sweep_spherical_1k.json.")
     args = ap.parse_args()
 
     if args.build_sweep:
-        _build_sweep_files(n_target=args.n_sweep)
+        miss_levels = _parse_floats(args.sweep_miss) if args.sweep_miss else None
+        _build_sweep_files(n_target=args.n_sweep, miss_levels=miss_levels,
+                           dense=args.dense, sweep_filename=args.sweep_filename)
         return
 
     miss = _parse_floats(args.miss)
