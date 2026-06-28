@@ -99,6 +99,32 @@ def _band_stats(miss_list):
     )
 
 
+def _dump_rollouts(rollout_dir, row, results):
+    """Tee the FULL per-rollout arrays for this cell to one .npz BEFORE _band_stats collapses
+    them to 8 scalars. The filename IS the cell key (the same 7-tuple that keys the summary CSV),
+    so each dump joins back to its summary row by construction — no separate index. Reorganizing
+    these into histograms later is a glob + parse-filename, with NO change to the sweep.
+
+    Keeps every per-rollout field run_mc returns that's useful post-hoc: the real (brahe) outcome,
+    the matrix-vs-brahe error, and the maneuver effort flown. Overwritten cleanly on a cell retry."""
+    if not rollout_dir:
+        return
+    os.makedirs(rollout_dir, exist_ok=True)
+    key = _cell_key(row["label"], row["miss_km"], row["angle_deg"], row["v_rel_ms"],
+                    row["init_miss"], row["init_spread"], row["variant"])
+    fname = "__".join(str(k) for k in key).replace("/", "_").replace(":", "-") + ".npz"
+
+    def col(name):
+        return np.array([float(r[name]) for r in results])
+
+    np.savez(os.path.join(rollout_dir, fname),
+             cell_key=np.array([str(k) for k in key]),
+             brahe_miss_km=col("brahe_miss_km"), brahe_dt_km=col("brahe_dt_km"),
+             matrix_miss_km=col("matrix_miss_km"), matrix_dt_km=col("matrix_dt_km"),
+             total_dv=col("total_dv"), n_burns=col("n_burns"),
+             true_term_reward=col("true_term_reward"))
+
+
 def _append_row(shard_path, row):
     """Append ONE row to the shard CSV (header once). Append-as-you-go so a killed child still
     leaves the cells it finished — parent merge + cell_key dedup makes it resumable."""
@@ -155,6 +181,9 @@ def main():
     ap.add_argument("--scenario-config", required=True)  # consumed pre-import; declared for argparse
     ap.add_argument("--job", required=True, help="JSON file: this conjunction's sweep job")
     ap.add_argument("--shard", required=True, help="shard CSV this child writes")
+    ap.add_argument("--rollout-dir", default=None,
+                    help="if set, dump the FULL per-rollout arrays for each cell to one .npz here "
+                         "(filename = cell key). None => only the 8 summary scalars in the row.")
     args = ap.parse_args()
 
     initialize_eop()
@@ -244,6 +273,7 @@ def main():
                     dec_src = RV.DecPolicySource(dec_full, TV.N_OBS_AGENT)
                     results = RV.run_mc(T, O, R, perp_used, None, dec_full, init_b,
                                         TV.N_OBS_AGENT, rollouts, seed=0, policy_source=dec_src)
+                    _dump_rollouts(args.rollout_dir, row, results)
                     row.update(status="ok", reason="",
                                **_band_stats([r["brahe_miss_km"] for r in results]))
                 else:
@@ -262,6 +292,7 @@ def main():
                         deviation=float(comp.get("deviation", 0.0)))
                     results = RV.run_mc(T, O, R, perp_used, sdec, full, init_b,
                                         TV.N_OBS_AGENT, rollouts, seed=0)
+                    _dump_rollouts(args.rollout_dir, row, results)
                     row.update(status="ok", reason="",
                                **_band_stats([r["brahe_miss_km"] for r in results]))
             except Exception as e:

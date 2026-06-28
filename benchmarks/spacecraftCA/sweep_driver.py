@@ -224,7 +224,7 @@ def resolve_contacts(conj, n_contacts):
 
 
 def spawn_conjunction(conj, beliefs, variants, baselines, backend, rollouts, b1_opts,
-                      n_contacts, done_keys, shard_path):
+                      n_contacts, done_keys, shard_path, rollout_dir=None):
     """Launch ONE _conj_worker child for this conjunction's WHOLE belief x variant grid.
 
     Writes the per-conjunction scenario YAML (--scenario-config) + a sweep-job JSON (the belief
@@ -250,6 +250,8 @@ def spawn_conjunction(conj, beliefs, variants, baselines, backend, rollouts, b1_
         json.dump(job, f)
     cmd = [PY, "-u", WORKER_SCRIPT, "--scenario-config", scen,
            "--job", job_path, "--shard", shard_path]
+    if rollout_dir:
+        cmd += ["--rollout-dir", rollout_dir]
     proc = subprocess.Popen(cmd, cwd=_HERE)
     return proc, workdir, (conj.name or conj.label)
 
@@ -398,6 +400,12 @@ def main():
                     choices=["numerical", "keplerian", "drag"])
     ap.add_argument("--tag", default="sweep")
     ap.add_argument("--out-dir", default=os.path.join(_HERE, "notes", "results"))
+    ap.add_argument("--save-rollouts", action="store_true",
+                    help="ALSO dump the FULL per-rollout arrays (200 brahe miss / dt / dV / "
+                         "n_burns / matrix-error per cell) to notes/results/rollouts_<tag>/, one "
+                         ".npz per cell keyed by the cell's 7-tuple. The summary CSV is unchanged; "
+                         "these let you rebuild histograms/percentiles/CDFs post-hoc "
+                         "(plot_rollout_dist.py). Survives shard cleanup. A few MB per sweep.")
     # wandb on top of the CSV (CSV stays the source of truth). One wandb run PER CELL
     # (conjunction x belief x variant), logging the same tidy ROW_FIELDS. FAIL-SOFT: a wandb
     # auth/network error never aborts the sweep. Mirrors main.py's wandb seam + default entity.
@@ -482,6 +490,12 @@ def main():
     #     writer) + wandb. KeyboardInterrupt drains what's done and exits with a valid CSV. ---
     shard_dir = os.path.join(args.out_dir, f"_shards_{args.tag}")
     os.makedirs(shard_dir, exist_ok=True)
+    # permanent (survives shard cleanup) raw-rollout dir, one .npz per cell — only if requested.
+    rollout_dir = None
+    if args.save_rollouts:
+        rollout_dir = os.path.join(args.out_dir, f"rollouts_{args.tag}")
+        os.makedirs(rollout_dir, exist_ok=True)
+        print(f"    saving full per-rollout arrays -> {rollout_dir}/ (one .npz per cell)")
     n_jobs = max(1, int(args.jobs))
     n_new = 0
     running = {}                      # proc -> (workdir, label, shard_path)
@@ -492,7 +506,8 @@ def main():
                                   f"m{conj.miss_km}_a{int(conj.angle_deg)}.csv")
         proc, workdir, label = spawn_conjunction(
             conj, beliefs, variants, args.baselines.split(",") if args.baselines else [],
-            args.backend, args.rollouts, b1_opts, args.n_contacts, conj_done, shard_path)
+            args.backend, args.rollouts, b1_opts, args.n_contacts, conj_done, shard_path,
+            rollout_dir=rollout_dir)
         running[proc] = (workdir, label, shard_path)
         print(f"  LAUNCH {label:<11} miss={conj.miss_km} a={conj.angle_deg:.0f} "
               f"({len(beliefs)*len(variants)-len(conj_done)} cells) [pid {proc.pid}]", flush=True)
