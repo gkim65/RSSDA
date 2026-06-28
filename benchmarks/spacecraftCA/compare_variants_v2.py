@@ -521,10 +521,41 @@ def solve_dec_policy(init_b, rsmaa_cfg=None, matrices=None):
     return T, O, R, perp, dec_full
 
 
-def solve_and_eval(variant, init_b, rsmaa=False, rsmaa_cfg=None, matrices=None):
+def _save_policy(full, T, O, R, perp, init_b, variant, tag, init_bin=0):
+    """Pickle the solved policy + the matrices/belief it was solved against, so it can be
+    re-flown / re-analyzed later with ZERO re-solve (the expensive noisy cells take hours).
+    Gated by env SPACECRAFT_SAVE_POLICY (off by default -> no effect on the anchor path).
+    Writes notes/policies/<tag>__<variant>__bin<init_bin>.pkl. Diagnostic/output-only."""
+    if not os.environ.get("SPACECRAFT_SAVE_POLICY"):
+        return
+    import pickle
+    out_dir = os.environ.get("SPACECRAFT_POLICY_DIR", "notes/policies")
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, f"{tag}__{variant}__bin{init_bin}.pkl")
+    payload = {
+        "full": full,                 # (value, policy, clustering, cent_vec, cen_dists_map, clustering_cen) or RS-MAA* tuple
+        "variant": variant, "tag": tag, "init_bin": init_bin,
+        "init_b": init_b, "perp": perp,
+        "n_stages": D.N_STAGES, "contact_stages": list(M.get_contact_stages()),
+        "obs_fidelity": getattr(_SCENARIO, "obs_fidelity", None),
+        "obs_sigma": getattr(_SCENARIO, "obs_sigma", None),
+        "propagator": getattr(_SCENARIO, "propagator", None),
+    }
+    # The T/O/R matrices are DETERMINISTIC from the scenario (rebuild via build_matrices), so by
+    # default we do NOT pickle them -- on full-res they're GB-scale per cell. Set
+    # SPACECRAFT_SAVE_MATRICES=1 to embed them for a fully self-contained, rebuild-free re-fly.
+    if os.environ.get("SPACECRAFT_SAVE_MATRICES"):
+        payload.update({"T": T, "O": O, "R": R})
+    with open(path, "wb") as f:
+        pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+    print(f"  [policy] saved -> {path}")
+
+
+def solve_and_eval(variant, init_b, rsmaa=False, rsmaa_cfg=None, matrices=None, tag="run"):
     """Solve + expected-eval one variant. matrices: optional pre-built (T,O,R,perp) from
     build_matrices(variant) to REUSE across beliefs of the same conjunction (skips the
-    ~22s rebuild); None => build here (standalone path, unchanged)."""
+    ~22s rebuild); None => build here (standalone path, unchanged). tag: used only to name
+    a saved-policy pickle when SPACECRAFT_SAVE_POLICY is set (no effect otherwise)."""
     T, O, R, perp = matrices if matrices is not None else build_matrices(variant)
     obs_agent_size = TV.N_OBS_AGENT
     if rsmaa:
@@ -532,6 +563,7 @@ def solve_and_eval(variant, init_b, rsmaa=False, rsmaa_cfg=None, matrices=None):
         # by the purpose-built RS-MAA* baseline). Native policy structure, evaluated
         # by the RS-MAA*-specific belief walk.
         full = solve_dec_rsmaa_v2(T, O, R, init_b, rsmaa_cfg or RSMAA_DEFAULTS)
+        _save_policy(full, T, O, R, perp, init_b, variant, tag)
         er, cp, burns, comp, term_dt, act_mass = expected_rsmaa_return_v2(
             T, O, R, full, init_b)
         return er, cp, burns, comp, term_dt, act_mass, None
@@ -540,6 +572,7 @@ def solve_and_eval(variant, init_b, rsmaa=False, rsmaa_cfg=None, matrices=None):
     model = v2_model(T, O, R, init_b, cs)
     sdec = SDecPOMDP(model=model, config=build_config_fixed())
     full = sdec.multi_agent_astar(D.N_STAGES)
+    _save_policy(full, T, O, R, perp, init_b, variant, tag)
     if _sdec_ti1_on():
         # TI1 may return a PREFIX policy -> the interleaved MPC evaluator re-solves at syncs.
         er, cp, burns, comp, term_dt, act_mass = expected_interleaved_return_v2(
@@ -718,7 +751,7 @@ def main():
     for variant in variants:
         is_dec = (variant == "dec")
         er, cp, burns, comp, term_dt, act_mass, note = solve_and_eval(
-            variant, init_b, rsmaa=is_dec, rsmaa_cfg=rsmaa_cfg)
+            variant, init_b, rsmaa=is_dec, rsmaa_cfg=rsmaa_cfg, tag=args.tag)
         label = _VARIANT_LABEL[variant]
         bstr = ",".join(f"s{k}:{burns[k]:.2f}" for k in range(D.N_STAGES) if burns[k] > 0.01)
         print(f"  {variant:<12} expected_return={er:>10.4f}  collision_prob={cp:.4f}")
