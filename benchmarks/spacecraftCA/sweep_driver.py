@@ -431,7 +431,8 @@ def main():
     ap.add_argument("--out-dir", default=os.path.join(_HERE, "notes", "results"))
     ap.add_argument("--save-rollouts", action="store_true",
                     help="ALSO dump the FULL per-rollout arrays (200 brahe miss / dt / dV / "
-                         "n_burns / matrix-error per cell) to notes/results/rollouts_<tag>/, one "
+                         "n_burns / matrix-error per cell + per-stage burn matrices burn_a1/burn_a2 "
+                         "= WHEN each agent burned) to notes/results/rollouts_<tag>/, one "
                          ".npz per cell keyed by the cell's 7-tuple. The summary CSV is unchanged; "
                          "these let you rebuild histograms/percentiles/CDFs post-hoc "
                          "(plot_rollout_dist.py). Survives shard cleanup. A few MB per sweep.")

@@ -106,7 +106,9 @@ def _dump_rollouts(rollout_dir, row, results):
     these into histograms later is a glob + parse-filename, with NO change to the sweep.
 
     Keeps every per-rollout field run_mc returns that's useful post-hoc: the real (brahe) outcome,
-    the matrix-vs-brahe error, and the maneuver effort flown. Overwritten cleanly on a cell retry."""
+    the matrix-vs-brahe error, the maneuver effort flown, AND the per-stage burn matrices
+    (burn_a1/burn_a2: (n_rollouts, N_STAGES) signed action per agent -> WHEN each burn fired).
+    Overwritten cleanly on a cell retry."""
     if not rollout_dir:
         return
     os.makedirs(rollout_dir, exist_ok=True)
@@ -117,12 +119,24 @@ def _dump_rollouts(rollout_dir, row, results):
     def col(name):
         return np.array([float(r[name]) for r in results])
 
+    # Per-stage burn matrices: (n_rollouts, N_STAGES) signed action per agent, scattered
+    # from each rollout's `burns` list of (stage, a1, a2). 0=WAIT, 1=+dV, 2=-dV (the _ACT
+    # encoding). This keeps WHEN each burn fired (not just the n_burns count), so a "burns
+    # over time" histogram is a column-sum -- the fewer-contacts-push-burns-later story.
+    burn_a1 = np.zeros((len(results), D.N_STAGES), dtype=np.int8)
+    burn_a2 = np.zeros((len(results), D.N_STAGES), dtype=np.int8)
+    for i, r in enumerate(results):
+        for (stage, a1, a2) in r["burns"]:
+            burn_a1[i, stage] = a1
+            burn_a2[i, stage] = a2
+
     np.savez(os.path.join(rollout_dir, fname),
              cell_key=np.array([str(k) for k in key]),
              brahe_miss_km=col("brahe_miss_km"), brahe_dt_km=col("brahe_dt_km"),
              matrix_miss_km=col("matrix_miss_km"), matrix_dt_km=col("matrix_dt_km"),
              total_dv=col("total_dv"), n_burns=col("n_burns"),
-             true_term_reward=col("true_term_reward"))
+             true_term_reward=col("true_term_reward"),
+             burn_a1=burn_a1, burn_a2=burn_a2)
 
 
 def _append_row(shard_path, row):

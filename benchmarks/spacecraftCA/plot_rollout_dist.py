@@ -19,6 +19,9 @@ Usage:
   # one violin per variant, faceted by angle, for a single belief:
   .venv/bin/python benchmarks/spacecraftCA/plot_rollout_dist.py --tag sweep400_drag \
       --violin --filter init_miss=0.5 init_spread=1.4
+
+  # per-stage burn-rate curve by variant (WHEN each agent burns; needs a post-burn-timing sweep):
+  .venv/bin/python benchmarks/spacecraftCA/plot_rollout_dist.py --tag sweep400_drag --burn-timing
 """
 import os, sys, glob, argparse
 import numpy as np
@@ -27,7 +30,9 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Cell-key field order — MUST match _conj_worker._cell_key / sweep_driver.cell_key.
 KEY_FIELDS = ["label", "miss_km", "angle_deg", "v_rel_ms", "init_miss", "init_spread", "variant"]
-# numeric per-rollout arrays stored in each .npz (besides cell_key)
+# numeric per-rollout SCALAR arrays stored in each .npz (besides cell_key). These are the
+# (n_rollouts,) columns that load_long explodes to one-row-per-rollout. The (n_rollouts,
+# N_STAGES) burn matrices (burn_a1/burn_a2) are 2-D and are handled by load_burns instead.
 ARRAYS = ["brahe_miss_km", "brahe_dt_km", "matrix_miss_km", "matrix_dt_km",
           "total_dv", "n_burns", "true_term_reward"]
 
@@ -100,6 +105,63 @@ def plot_violin(df, tag, col="brahe_miss_km"):
     _save(fig, tag, f"violin_{col}")
 
 
+def load_burns(tag, out_dir=None, filters=None):
+    """Glob the tag's .npz dumps and stack the per-stage burn matrices per variant. Unlike
+    load_long, this keeps the 2-D (n_rollouts, N_STAGES) shape (no per-rollout explode), then
+    column-sums to a (N_STAGES,) "how many rollouts burned at this stage" curve. Returns
+    {variant: dict(burns=summed_per_stage, n_rollouts=int, n_stages=int)}. Cells whose .npz
+    predate the burn-matrix change (no burn_a1 key) are skipped with a count, so an old sweep
+    degrades gracefully instead of crashing."""
+    rdir = rollout_dir_for(tag, out_dir)
+    files = sorted(glob.glob(os.path.join(rdir, "*.npz")))
+    if not files:
+        sys.exit(f"no rollout dumps found in {rdir}/ — was the sweep run with --save-rollouts?")
+    per_variant, n_skipped, n_stages = {}, 0, None
+    for fp in files:
+        z = np.load(fp, allow_pickle=False)
+        key = {k: v for k, v in zip(KEY_FIELDS, [str(x) for x in z["cell_key"]])}
+        if filters and any(str(key.get(k)) != str(v) for k, v in filters.items()):
+            continue
+        if "burn_a1" not in z.files or "burn_a2" not in z.files:
+            n_skipped += 1
+            continue
+        # an agent burned at a stage iff its action there is nonzero; count rollouts-with-a-burn
+        fired = (z["burn_a1"] != 0).astype(int) + (z["burn_a2"] != 0).astype(int)  # (rollouts, stages)
+        n_stages = fired.shape[1]
+        v = key["variant"]
+        acc = per_variant.setdefault(v, dict(burns=np.zeros(n_stages, dtype=float), n_rollouts=0))
+        acc["burns"] += fired.sum(axis=0)
+        acc["n_rollouts"] += fired.shape[0]
+    if n_skipped:
+        print(f"  (skipped {n_skipped} cell(s) with no burn matrix — pre-burn-timing dump)")
+    if not per_variant:
+        sys.exit(f"no cells with burn matrices matched filters {filters} "
+                 f"(need a sweep run AFTER the burn-timing change)")
+    for acc in per_variant.values():
+        acc["n_stages"] = n_stages
+    return per_variant
+
+
+def plot_burn_timing(tag, out_dir=None, filters=None):
+    """Per-stage burn-rate curve by variant: fraction of rollouts that fire ANY agent-burn at
+    each decision stage. The fewer-sync-contacts -> burns-pushed-later story reads straight off
+    this plot (Dec commits earlier/blindly; Cen/SDec wait for a contact then burn)."""
+    import matplotlib.pyplot as plt
+    per_variant = load_burns(tag, out_dir, filters)
+    fig, ax = plt.subplots(figsize=(9, 5))
+    for v in sorted(per_variant):
+        acc = per_variant[v]
+        rate = acc["burns"] / max(acc["n_rollouts"], 1)   # avg agent-burns per rollout at each stage
+        ax.plot(range(acc["n_stages"]), rate, marker="o", ms=3, lw=1.8,
+                label=f"{v} (n={acc['n_rollouts']})")
+    ax.set_xlabel("decision stage (0 = T-24h start -> TCA)")
+    ax.set_ylabel("avg agent-burns per rollout at stage")
+    ax.set_title(f"burn timing by variant — {tag}")
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=8)
+    _save(fig, tag, "burn_timing")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -110,10 +172,21 @@ def main():
                     help="subset cells, e.g. --filter variant=sdec init_miss=0.5 angle_deg=0")
     ap.add_argument("--hist", action="store_true", help="overlaid step-histogram by variant")
     ap.add_argument("--violin", action="store_true", help="violin by variant")
+    ap.add_argument("--burn-timing", action="store_true",
+                    help="per-stage burn-rate curve by variant (from the burn_a1/burn_a2 matrices "
+                         "— WHEN each agent burns). Needs a sweep run after the burn-timing change.")
     ap.add_argument("--to-csv", action="store_true", help="dump the tidy long DataFrame to CSV")
     args = ap.parse_args()
 
     filters = dict(kv.split("=", 1) for kv in args.filter) if args.filter else None
+
+    # --burn-timing reads the 2-D burn matrices directly (no per-rollout explode), so it bypasses
+    # load_long. Handle it first so it can run on its own without building the long DataFrame.
+    if args.burn_timing:
+        plot_burn_timing(args.tag, args.out_dir, filters)
+        if not (args.hist or args.violin or args.to_csv):
+            return
+
     df = load_long(args.tag, args.out_dir, filters)
     print(f"loaded {len(df)} rollouts across {df.groupby(KEY_FIELDS).ngroups} cells "
           f"({df['variant'].nunique()} variants)")
