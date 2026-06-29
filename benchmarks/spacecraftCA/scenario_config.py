@@ -90,6 +90,12 @@ class Scenario:
                                                    # sync). 20 == anchor. LOWER (2/3/4) caps the post-sync
                                                    # belief fan-out for graded (TLE) obs -> tractable, but
                                                    # too low collapses the noise (degenerate ~= perfect).
+    sdec_memory_limit_gb: float = 16.0             # SDec/Cen RS-SDA* memory ceiling (GB). Raises
+                                                   # MemoryLimitExceeded above it (the cell logs DNF, the
+                                                   # run/sweep continues). 16 = solver default; raise on a
+                                                   # big-memory box; <=0 => no limit.
+    sdec_verbose: bool = False                     # SDec/Cen RS-SDA*: print per-iter [A*] progress lines
+                                                   # (iter/value/best/depth). Diagnostic only; OFF default.
 
     def to_dict(self) -> dict:
         """Plain dict (for wandb config logging / round-trip)."""
@@ -193,6 +199,8 @@ def scenario_from_cfg(cfg) -> Scenario:
         sdec_iter_limit=int(g(solve, "sdec_iter_limit", d.sdec_iter_limit)),
         sdec_ti1=bool(g(solve, "sdec_ti1", d.sdec_ti1)),
         sdec_max_clusters=int(g(solve, "sdec_max_clusters", d.sdec_max_clusters)),
+        sdec_memory_limit_gb=float(g(solve, "sdec_memory_limit_gb", d.sdec_memory_limit_gb)),
+        sdec_verbose=bool(g(solve, "sdec_verbose", d.sdec_verbose)),
     )
 
 
@@ -302,6 +310,8 @@ def _cli_bootstrap_scenario(argv):
     ap.add_argument("--sdec-iter-limit", type=int, default=None)
     ap.add_argument("--sdec-ti1", dest="sdec_ti1", action="store_true", default=None)
     ap.add_argument("--sdec-max-clusters", type=int, default=None)
+    ap.add_argument("--sdec-memory-limit-gb", type=float, default=None)
+    ap.add_argument("--sdec-verbose", dest="sdec_verbose", action="store_true", default=None)
     ns, _ = ap.parse_known_args(argv[1:])
 
     cfg = load_yaml_cfg(ns.scenario_config) if ns.scenario_config else {}
@@ -345,6 +355,10 @@ def _cli_bootstrap_scenario(argv):
         overrides["sdec_ti1"] = True
     if ns.sdec_max_clusters is not None:
         overrides["sdec_max_clusters"] = ns.sdec_max_clusters
+    if ns.sdec_memory_limit_gb is not None:
+        overrides["sdec_memory_limit_gb"] = ns.sdec_memory_limit_gb
+    if ns.sdec_verbose is not None:
+        overrides["sdec_verbose"] = True
 
     from dataclasses import replace
     scenario = replace(base, **overrides)

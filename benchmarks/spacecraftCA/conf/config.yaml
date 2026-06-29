@@ -107,6 +107,11 @@ solve:
                                #   graded (TLE) obs; but too low collapses the noise (degenerate ~=
                                #   perfect) AND (measured 2026-06-26) is pathologically SLOW on full-res
                                #   -- sigma is the real fan-out lever, not this.
+  sdec_memory_limit_gb: 16.0   # SDec/Cen RS-SDA* memory ceiling (GB). Above it the cell raises +
+                               #   logs DNF (the run/sweep continues). 16 = solver default; raise on a
+                               #   big-memory box (e.g. 100); <=0 => no limit.
+  sdec_verbose: false          # SDec/Cen RS-SDA* per-iter [A*] progress logging (iter/value/best/
+                               #   depth). Diagnostic only; false (default) => quiet.
 
 # -----------------------------------------------------------------------------
 # RUN — runner/output (NOT scenario fields; steer the runner, not the model).
@@ -114,6 +119,12 @@ solve:
 run:
   tag: config_run
   out_dir: notes/results
+  save_policy: false           # pickle each solved policy -> notes/policies/<tag>__<variant>__bin<n>.pkl
+                               #   (re-fly later with ZERO re-solve via load_policy.py / rollout_v2).
+  save_matrices: false         # when save_policy: embed T/O/R too (self-contained but GB-scale at full
+                               #   res). false => light pickle (policy+belief+metadata, ~KB); rebuild
+                               #   matrices deterministically via build_matrices.
+  policy_dir: notes/policies   # where save_policy writes the pickles.
   fig_dir: notes/figures
   figures: false
   rollout: false               # also brahe-validate the solved policy (rollout_v2 MC)

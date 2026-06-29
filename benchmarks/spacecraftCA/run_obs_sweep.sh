@@ -24,14 +24,11 @@ CASES=(head_on oblique cross_track)
 INIT_MISS=0.5                            # belief center (km). See note below re: straddling.
 INIT_SPREAD=1.4                          # belief spread (km).
 ITER_LIMIT=50000                         # TI2 budget -> a hung cell BAILS with a number (partial result)
+MEM_LIMIT_GB=100                         # RS-SDA* memory ceiling (GB). Raise to your box; <=0 = no limit.
 ROLLOUTS=200                             # brahe-MC rollouts per cell
 WANDB_PROJECT=spacecraftCA-obs-sweep
 # WANDB_OFFLINE=1                        # uncomment if you can't `wandb login`; `wandb sync` later
 # -----------------------------------------------------------------------------
-
-export SPACECRAFT_SAVE_POLICY=1          # pickle each solved policy (light: no matrices)
-# export SPACECRAFT_SAVE_MATRICES=1      # uncomment for self-contained pickles (GB-scale at full res)
-# export SPACECRAFT_VERBOSE_ASTAR=1      # uncomment for per-iter [A*] progress lines in the logs
 
 SC1='[6928136.3,0.001,55.0,20.0,0.0,0.0]'
 declare -A SC2
@@ -55,8 +52,8 @@ for SIG in "${SIGMAS[@]}"; do
       solve.variants='[sdec]' grid.propagator=drag obs.sigma=$SIG \
       conjunction.sc1_oe="$SC1" conjunction.sc2_oe="${SC2[$CASE]}" \
       belief.init_miss=${INIT_MISS} belief.init_spread=${INIT_SPREAD} \
-      solve.sdec_iter_limit=${ITER_LIMIT} \
-      run.rollout=true run.rollouts=${ROLLOUTS} \
+      solve.sdec_iter_limit=${ITER_LIMIT} solve.sdec_memory_limit_gb=${MEM_LIMIT_GB} \
+      run.rollout=true run.rollouts=${ROLLOUTS} run.save_policy=true \
       ${wandb_flags} \
       wandb.name=${TAG} run.tag=${TAG} \
       2>&1 | tee "$LOG"

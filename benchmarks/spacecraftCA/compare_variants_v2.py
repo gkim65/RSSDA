@@ -39,7 +39,7 @@ from scenario_config import (
 _SCENARIO = _cli_bootstrap_scenario(sys.argv)
 
 from brahe import initialize_eop
-from RSSDA import SDecPOMDP, SDecPOMDPModel, int_tuple
+from RSSDA import SDecPOMDP, SDecPOMDPModel, int_tuple, MemoryLimitExceeded
 from baselines.decPOMDP import DecPOMDP as RSMAA
 
 import spacecraft_transition_v2 as TV
@@ -73,8 +73,13 @@ def build_config_fixed():
     _mc = getattr(_SCENARIO, "sdec_max_clusters", None)
     if _mc is not None:
         cfg.max_clusters = int(_mc)   # TI4 cap; 20 == anchor, lower => prune graded-obs fan-out
-    if os.environ.get("SPACECRAFT_VERBOSE_ASTAR"):
-        cfg.output = True             # print per-iter [A*] iter=/value=/best=/depth lines (diagnostic only)
+    if bool(getattr(_SCENARIO, "sdec_verbose", False)):
+        cfg.output = True             # print per-iter [A*] iter=/value=/best=/depth lines (diagnostic)
+    _ml = getattr(_SCENARIO, "sdec_memory_limit_gb", None)
+    if _ml is not None:
+        # RSSDAConfig defaults to 16GB (raises MemoryLimitExceeded above it). Raise it on a
+        # big-memory box; <=0 => no limit.
+        cfg.memory_limit_gb = None if float(_ml) <= 0 else float(_ml)
     return cfg
 
 
@@ -521,17 +526,22 @@ def solve_dec_policy(init_b, rsmaa_cfg=None, matrices=None):
     return T, O, R, perp, dec_full
 
 
+# Policy-save options, set by main()'s argparse from cfg.run.{save_policy,save_matrices,policy_dir}
+# (the config surface; off by default -> no effect on the anchor path).
+_SAVE_POLICY = False
+_SAVE_MATRICES = False
+_POLICY_DIR = "notes/policies"
+
+
 def _save_policy(full, T, O, R, perp, init_b, variant, tag, init_bin=0):
-    """Pickle the solved policy + the matrices/belief it was solved against, so it can be
-    re-flown / re-analyzed later with ZERO re-solve (the expensive noisy cells take hours).
-    Gated by env SPACECRAFT_SAVE_POLICY (off by default -> no effect on the anchor path).
-    Writes notes/policies/<tag>__<variant>__bin<init_bin>.pkl. Diagnostic/output-only."""
-    if not os.environ.get("SPACECRAFT_SAVE_POLICY"):
+    """Pickle the solved policy + the belief it was solved against, so it can be re-flown /
+    re-analyzed later with ZERO re-solve (the expensive noisy cells take hours). Gated by
+    cfg.run.save_policy (off by default). Writes <policy_dir>/<tag>__<variant>__bin<init_bin>.pkl."""
+    if not _SAVE_POLICY:
         return
     import pickle
-    out_dir = os.environ.get("SPACECRAFT_POLICY_DIR", "notes/policies")
-    os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, f"{tag}__{variant}__bin{init_bin}.pkl")
+    os.makedirs(_POLICY_DIR, exist_ok=True)
+    path = os.path.join(_POLICY_DIR, f"{tag}__{variant}__bin{init_bin}.pkl")
     payload = {
         "full": full,                 # (value, policy, clustering, cent_vec, cen_dists_map, clustering_cen) or RS-MAA* tuple
         "variant": variant, "tag": tag, "init_bin": init_bin,
@@ -541,10 +551,10 @@ def _save_policy(full, T, O, R, perp, init_b, variant, tag, init_bin=0):
         "obs_sigma": getattr(_SCENARIO, "obs_sigma", None),
         "propagator": getattr(_SCENARIO, "propagator", None),
     }
-    # The T/O/R matrices are DETERMINISTIC from the scenario (rebuild via build_matrices), so by
-    # default we do NOT pickle them -- on full-res they're GB-scale per cell. Set
-    # SPACECRAFT_SAVE_MATRICES=1 to embed them for a fully self-contained, rebuild-free re-fly.
-    if os.environ.get("SPACECRAFT_SAVE_MATRICES"):
+    # T/O/R are DETERMINISTIC from the scenario (rebuild via build_matrices), so by default we do
+    # NOT pickle them -- on full-res they're GB-scale per cell. cfg.run.save_matrices embeds them
+    # for a fully self-contained, rebuild-free re-fly.
+    if _SAVE_MATRICES:
         payload.update({"T": T, "O": O, "R": R})
     with open(path, "wb") as f:
         pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -571,7 +581,16 @@ def solve_and_eval(variant, init_b, rsmaa=False, rsmaa_cfg=None, matrices=None, 
           "sdec": M.get_contact_stages()}[variant]
     model = v2_model(T, O, R, init_b, cs)
     sdec = SDecPOMDP(model=model, config=build_config_fixed())
-    full = sdec.multi_agent_astar(D.N_STAGES)
+    try:
+        full = sdec.multi_agent_astar(D.N_STAGES)
+    except MemoryLimitExceeded as e:
+        # A cell that blows the memory ceiling logs a DNF row instead of crashing the whole
+        # job/sweep. NaN return + empty parts so downstream formatting stays safe.
+        import math
+        print(f"  [{variant}] SKIPPED — {e}")
+        return (math.nan, math.nan, np.zeros(D.N_STAGES),
+                {"maneuver": 0.0, "deviation": 0.0, "risk": 0.0, "displace": 0.0},
+                {}, {}, f"DNF: {e}")
     _save_policy(full, T, O, R, perp, init_b, variant, tag)
     if _sdec_ti1_on():
         # TI1 may return a PREFIX policy -> the interleaved MPC evaluator re-solves at syncs.
@@ -658,6 +677,11 @@ def main():
     ap.add_argument("--sdec-max-clusters", type=int, default=None,
                     help="SDec/Cen RS-SDA* TI4 belief-cluster cap (cfg.solve.sdec_max_clusters; "
                          "default 20 == anchor; lower caps graded-obs fan-out -> tractable).")
+    ap.add_argument("--sdec-memory-limit-gb", type=float, default=None,
+                    help="SDec/Cen RS-SDA* memory ceiling GB (cfg.solve.sdec_memory_limit_gb; "
+                         "default 16; raise on a big-memory box; <=0 => no limit).")
+    ap.add_argument("--sdec-verbose", dest="sdec_verbose", action="store_true", default=None,
+                    help="SDec/Cen RS-SDA* per-iter [A*] progress logging (cfg.solve.sdec_verbose).")
     ap.add_argument("--hour-grid", default=None,
                     help="base decision cadence, comma hours-before-TCA desc "
                          "(cfg.grid.hour_grid_h; default ~2h).")
@@ -685,6 +709,13 @@ def main():
     ap.add_argument("--fig-dir", type=str,
                     default=os.path.join(_HERE, "notes", "figures"))
     ap.add_argument("--no-figures", action="store_true")
+    ap.add_argument("--save-policy", action="store_true",
+                    help="pickle each solved policy (cfg.run.save_policy) -> --policy-dir.")
+    ap.add_argument("--save-matrices", action="store_true",
+                    help="with --save-policy, embed T/O/R in the pickle (cfg.run.save_matrices; "
+                         "GB-scale at full res). Default: light pickle (rebuild matrices).")
+    ap.add_argument("--policy-dir", type=str, default=os.path.join(_HERE, "notes", "policies"),
+                    help="where --save-policy writes pickles (cfg.run.policy_dir).")
     ap.add_argument("--variants", type=str, default="centralized,sdec,dec",
                     help="comma-separated subset of centralized,sdec,dec")
     ap.add_argument("--backend", default=None, choices=["numerical", "keplerian", "drag"],
@@ -705,8 +736,11 @@ def main():
     ap.add_argument("--iter-limit", type=int, default=RSMAA_DEFAULTS["iter_limit"])
     ap.add_argument("--verbose-rsmaa", action="store_true")
     args = ap.parse_args()
-    global PERP_KM
+    global PERP_KM, _SAVE_POLICY, _SAVE_MATRICES, _POLICY_DIR
     PERP_KM = args.perp
+    _SAVE_POLICY = bool(args.save_policy)
+    _SAVE_MATRICES = bool(args.save_matrices)
+    _POLICY_DIR = args.policy_dir
     initialize_eop()
 
     # --- contact-timing override (Scenario-1 ablation). Sets the SINGLE global that

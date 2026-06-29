@@ -79,6 +79,11 @@ def main(cfg: DictConfig) -> None:
                      ",".join(str(s) for s in scenario.contact_stages)]
         if not bool(run.figures):
             argv += ["--no-figures"]
+        if bool(run.get("save_policy", False)):
+            argv += ["--save-policy", "--policy-dir",
+                     _abs(str(run.get("policy_dir", "notes/policies")))]
+            if bool(run.get("save_matrices", False)):
+                argv += ["--save-matrices"]
         sys.argv = argv
         result = CV.main()
     else:
