@@ -179,7 +179,9 @@ def _wandb_log_row(row, wb):
 # spawn ONE _conj_worker child that handles the whole belief x variant grid (matrix reuse).
 # ---------------------------------------------------------------------------
 
-def _conj_scenario_file(conj, workdir, backend, contacts=None):
+def _conj_scenario_file(conj, workdir, backend, contacts=None,
+                        obs_fidelity=None, obs_sigma=None,
+                        sdec_memory_limit_gb=None, sdec_iter_limit=None):
     """Write this conjunction's SCENARIO as a YAML config the child consumes via
     --scenario-config (the ONE config handoff; replaces the SPACECRAFT_CONJ_GRID + env model).
     Carries the orbit pair (so the child's grid rebuilds for THIS conjunction's stage count),
@@ -196,6 +198,21 @@ def _conj_scenario_file(conj, workdir, backend, contacts=None):
     }
     if contacts is not None:
         cfg["contacts"] = {"stages": [int(s) for s in contacts.split(",") if s.strip() != ""]}
+    # obs-fidelity + solve knobs (same across the sweep; the worker reads them via build_scenario).
+    obs = {}
+    if obs_fidelity is not None:
+        obs["fidelity"] = obs_fidelity
+    if obs_sigma is not None:
+        obs["sigma"] = float(obs_sigma)
+    if obs:
+        cfg["obs"] = obs
+    solve = {}
+    if sdec_memory_limit_gb is not None:
+        solve["sdec_memory_limit_gb"] = float(sdec_memory_limit_gb)
+    if sdec_iter_limit is not None:
+        solve["sdec_iter_limit"] = int(sdec_iter_limit)
+    if solve:
+        cfg["solve"] = solve
     path = os.path.join(workdir, "conj_scenario.yaml")
     with open(path, "w") as f:
         yaml.safe_dump(cfg, f)
@@ -224,7 +241,7 @@ def resolve_contacts(conj, n_contacts):
 
 
 def spawn_conjunction(conj, beliefs, variants, baselines, backend, rollouts, b1_opts,
-                      n_contacts, done_keys, shard_path, rollout_dir=None):
+                      n_contacts, done_keys, shard_path, rollout_dir=None, solve_obs=None):
     """Launch ONE _conj_worker child for this conjunction's WHOLE belief x variant grid.
 
     Writes the per-conjunction scenario YAML (--scenario-config) + a sweep-job JSON (the belief
@@ -234,7 +251,7 @@ def spawn_conjunction(conj, beliefs, variants, baselines, backend, rollouts, b1_
     so the caller's pool can wait on it, drain its shard, and clean up. NON-blocking (for --jobs)."""
     workdir = tempfile.mkdtemp(prefix="sweep_conj_")
     contacts = resolve_contacts(conj, n_contacts)     # comma-string subset or None (full set)
-    scen = _conj_scenario_file(conj, workdir, backend, contacts)
+    scen = _conj_scenario_file(conj, workdir, backend, contacts, **(solve_obs or {}))
     job = {
         "label": conj.name or conj.label, "miss_km": conj.miss_km,
         "angle_deg": conj.angle_deg, "perp_km": conj.perp_km, "dt0_km": conj.dt0_km,
@@ -398,6 +415,18 @@ def main():
                          "Dec at none). Use with --variants sdec to actually go faster.")
     ap.add_argument("--backend", default="numerical",
                     choices=["numerical", "keplerian", "drag"])
+    # --- obs-fidelity + solve knobs (written into each conjunction's scenario YAML; the worker
+    #     picks them up via build_scenario, same as the orbit/grid). Defaults = the anchor. ---
+    ap.add_argument("--obs-fidelity", default=None,
+                    help="SDec sync obs fidelity: perfect|gps|tle|asymmetric (obs.fidelity).")
+    ap.add_argument("--obs-sigma", default=None,
+                    help="raw SDec sync obs sigma km (obs.sigma); overrides the named fidelity.")
+    ap.add_argument("--sdec-memory-limit-gb", type=float, default=None,
+                    help="RS-SDA* memory ceiling GB (solve.sdec_memory_limit_gb); raise on a "
+                         "big-memory box; <=0 => no limit. Default = solver default (16).")
+    ap.add_argument("--sdec-iter-limit", type=int, default=None,
+                    help="RS-SDA* TI2 budget (solve.sdec_iter_limit); a hung cell bails with a "
+                         "partial return instead of running forever.")
     ap.add_argument("--tag", default="sweep")
     ap.add_argument("--out-dir", default=os.path.join(_HERE, "notes", "results"))
     ap.add_argument("--save-rollouts", action="store_true",
@@ -501,13 +530,18 @@ def main():
     running = {}                      # proc -> (workdir, label, shard_path)
     queue = list(pending)
 
+    # obs-fidelity + solve knobs applied to EVERY conjunction's scenario YAML (same across the sweep).
+    solve_obs = {"obs_fidelity": args.obs_fidelity, "obs_sigma": args.obs_sigma,
+                 "sdec_memory_limit_gb": args.sdec_memory_limit_gb,
+                 "sdec_iter_limit": args.sdec_iter_limit}
+
     def _launch(conj, conj_done):
         shard_path = os.path.join(shard_dir, f"{(conj.name or conj.label)}_"
                                   f"m{conj.miss_km}_a{int(conj.angle_deg)}.csv")
         proc, workdir, label = spawn_conjunction(
             conj, beliefs, variants, args.baselines.split(",") if args.baselines else [],
             args.backend, args.rollouts, b1_opts, args.n_contacts, conj_done, shard_path,
-            rollout_dir=rollout_dir)
+            rollout_dir=rollout_dir, solve_obs=solve_obs)
         running[proc] = (workdir, label, shard_path)
         print(f"  LAUNCH {label:<11} miss={conj.miss_km} a={conj.angle_deg:.0f} "
               f"({len(beliefs)*len(variants)-len(conj_done)} cells) [pid {proc.pid}]", flush=True)
