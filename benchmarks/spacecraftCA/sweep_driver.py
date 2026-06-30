@@ -143,21 +143,29 @@ def write_rows(csv_path, rows):
             w.writerow({k: r.get(k, "") for k in ROW_FIELDS})
 
 
-def _wandb_log_row(row, wb):
+def _wandb_log_row(row, wb, extra_config=None, name_suffix=""):
     """Log ONE sweep cell (conjunction x belief x variant) as a wandb run, mirroring the tidy
     ROW_FIELDS the CSV holds. FAIL-SOFT: any wandb error is warned + swallowed so the sweep never
-    aborts (CSV is the source of truth). `wb` = dict(project, entity, mode) or None to skip."""
+    aborts (CSV is the source of truth). `wb` = dict(project, entity, mode) or None to skip.
+
+    extra_config: extra (usually non-numeric) fields to record in the run's CONFIG — e.g.
+    peel_contacts passes {contacts, subset_name, n_contacts} so WHICH contacts were kept is logged
+    (strings can't be wandb.log metrics, so they MUST ride in config). name_suffix disambiguates
+    the run name when many rows share the same conj/belief/variant (e.g. peel subsets)."""
     if not wb:
         return
     try:
         import wandb
         name = f"{row.get('label','')}_m{row.get('miss_km','')}_a{row.get('angle_deg','')}_" \
-               f"im{row.get('init_miss','')}_is{row.get('init_spread','')}_{row.get('variant','')}"
+               f"im{row.get('init_miss','')}_is{row.get('init_spread','')}_{row.get('variant','')}" \
+               f"{name_suffix}"
+        config = {k: row.get(k) for k in
+                  ("label", "miss_km", "angle_deg", "perp_km", "v_rel_ms",
+                   "init_miss", "init_spread", "variant")}
+        if extra_config:
+            config.update(extra_config)
         r = wandb.init(project=wb["project"], entity=wb["entity"] or None, mode=wb["mode"],
-                       name=name, group=wb.get("tag"), reinit=True,
-                       config={k: row.get(k) for k in
-                               ("label", "miss_km", "angle_deg", "perp_km", "v_rel_ms",
-                                "init_miss", "init_spread", "variant")})
+                       name=name, group=wb.get("tag"), reinit=True, config=config)
         # numeric metrics (skip blanks / non-numeric so B1's empty solver fields don't crash)
         for k in ("expected_return", "collision_prob_matrix", "dv_ms", "syncs", "deviation",
                   "brahe_coll_pct", "brahe_miss_mean", "brahe_miss_min", "brahe_miss_max",
@@ -241,16 +249,22 @@ def resolve_contacts(conj, n_contacts):
 
 
 def spawn_conjunction(conj, beliefs, variants, baselines, backend, rollouts, b1_opts,
-                      n_contacts, done_keys, shard_path, rollout_dir=None, solve_obs=None):
+                      n_contacts, done_keys, shard_path, rollout_dir=None, solve_obs=None,
+                      contacts=None):
     """Launch ONE _conj_worker child for this conjunction's WHOLE belief x variant grid.
 
     Writes the per-conjunction scenario YAML (--scenario-config) + a sweep-job JSON (the belief
     grid, variants, rollouts, the SDec contact subset, the already-done cell keys to skip), then
     starts the child as a Popen. The child builds T/O/R ONCE and reuses them across beliefs,
     appending each cell's row to `shard_path` as it completes. Returns (Popen, workdir, job_label)
-    so the caller's pool can wait on it, drain its shard, and clean up. NON-blocking (for --jobs)."""
+    so the caller's pool can wait on it, drain its shard, and clean up. NON-blocking (for --jobs).
+
+    contacts: EXPLICIT contact subset override (comma-string of stages, or "" for none). Default
+    None => derive first-N from n_contacts via resolve_contacts (the sweep's behavior). peel_contacts
+    passes an explicit arbitrary subset here so it doesn't have to monkeypatch resolve_contacts."""
     workdir = tempfile.mkdtemp(prefix="sweep_conj_")
-    contacts = resolve_contacts(conj, n_contacts)     # comma-string subset or None (full set)
+    if contacts is None:
+        contacts = resolve_contacts(conj, n_contacts)  # comma-string subset or None (full set)
     scen = _conj_scenario_file(conj, workdir, backend, contacts, **(solve_obs or {}))
     job = {
         "label": conj.name or conj.label, "miss_km": conj.miss_km,

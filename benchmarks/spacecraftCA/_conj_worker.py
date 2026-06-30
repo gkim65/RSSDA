@@ -114,7 +114,13 @@ def _dump_rollouts(rollout_dir, row, results):
     os.makedirs(rollout_dir, exist_ok=True)
     key = _cell_key(row["label"], row["miss_km"], row["angle_deg"], row["v_rel_ms"],
                     row["init_miss"], row["init_spread"], row["variant"])
-    fname = "__".join(str(k) for k in key).replace("/", "_").replace(":", "-") + ".npz"
+    fname = "__".join(str(k) for k in key)
+    # Disambiguate same-variant runs that differ ONLY by contact subset (peel solves many SDec
+    # subsets; the cell_key ends in `variant`, so without this they'd all overwrite one ...sdec.npz).
+    csig = row.get("contacts")
+    if csig not in (None, "", "ALL"):
+        fname += "__c" + str(csig).replace(",", "-")
+    fname = fname.replace("/", "_").replace(":", "-") + ".npz"
 
     def col(name):
         return np.array([float(r[name]) for r in results])
@@ -233,6 +239,7 @@ def main():
         label=job["label"], miss_km=job["miss_km"], angle_deg=job["angle_deg"],
         perp_km=perp, dt0_km=job["dt0_km"], v_rel_ms=job["v_rel_ms"],
         n_stages=n_stages, n_contacts=n_contacts,
+        contacts=contacts,        # explicit subset string (None=full); used to keep .npz names unique
     )
 
     # --- MATRIX REUSE: build T/O/R ONCE per (variant, contact-subset), reuse across beliefs.
