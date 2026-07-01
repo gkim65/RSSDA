@@ -443,6 +443,55 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
     _save(fig, tag, "miss_shift_overlay_pooled" if pool else "miss_shift_overlay")
 
 
+def plot_matrix_error(df, tag, fs=13.0):
+    """Planner-vs-truth miss error: how far the DISCRETIZED matrix model's predicted miss
+    (matrix_miss_km) diverges from the high-fidelity brahe propagation (brahe_miss_km) that the
+    same policy actually achieves. Two panels:
+      (left)  scatter matrix vs brahe with the y=x agreement line -- points ABOVE the line are
+              rollouts the planner thinks cleared farther than they truly did (optimistic; a
+              safety concern). Off-diagonal clusters expose discretization/quantization error.
+      (right) histogram of the signed error (matrix - brahe) per variant.
+    Needs matrix_miss_km + brahe_miss_km in df (present in every sweep .npz)."""
+    import matplotlib.pyplot as plt
+    if "matrix_miss_km" not in df or df["matrix_miss_km"].isna().all():
+        sys.exit("no matrix_miss_km in these dumps -- cannot plot planner-vs-truth error")
+
+    fig, (axs, axh) = plt.subplots(1, 2, figsize=(11, 4.8))
+    err = df["matrix_miss_km"] - df["brahe_miss_km"]
+    hi = float(np.nanmax([df["matrix_miss_km"].max(), df["brahe_miss_km"].max()])) * 1.05
+
+    # (left) scatter, colored by variant
+    for v in _ordered_variants(df["variant"].unique()):
+        g = df[df["variant"] == v]
+        axs.scatter(g["brahe_miss_km"], g["matrix_miss_km"], s=10, alpha=0.35,
+                    color=_VARIANT_COLORS.get(v, "0.3"), label=_variant_label(v))
+    axs.plot([0, hi], [0, hi], "k--", lw=1.2, label="Perfect agreement")
+    axs.axvspan(4.0, 7.0, color="green", alpha=0.07)
+    axs.set_xlim(0, hi); axs.set_ylim(0, hi)
+    axs.set_xlabel("True miss (brahe, km)", fontsize=fs)
+    axs.set_ylabel("Planner miss (matrix, km)", fontsize=fs)
+    axs.set_title("Planner vs. true miss", fontsize=fs + 1)
+    axs.tick_params(labelsize=fs - 1.5)
+    axs.legend(fontsize=fs - 3.0, loc="upper left")
+
+    # (right) signed-error histogram per variant
+    lo, hip = np.nanpercentile(err, [0.5, 99.5])
+    edges = np.linspace(lo, hip, 41)
+    for v in _ordered_variants(df["variant"].unique()):
+        e = (df[df["variant"] == v]["matrix_miss_km"] - df[df["variant"] == v]["brahe_miss_km"])
+        axh.hist(e, bins=edges, histtype="step", linewidth=1.8,
+                 color=_VARIANT_COLORS.get(v, "0.3"), label=_variant_label(v))
+    axh.axvline(0.0, color="k", ls="--", lw=1.2)
+    axh.set_xlabel("Planner error: matrix $-$ brahe (km)", fontsize=fs)
+    axh.set_ylabel("Rollouts", fontsize=fs)
+    axh.set_title("Optimism $\\rightarrow$", fontsize=fs + 1, loc="right")
+    axh.tick_params(labelsize=fs - 1.5)
+    axh.legend(fontsize=fs - 3.0, loc="upper right")
+
+    fig.tight_layout()
+    _save(fig, tag, "matrix_error")
+
+
 def load_burns(tag, out_dir=None, filters=None):
     """Glob the tag's .npz dumps and stack the per-stage burn matrices per variant. Unlike
     load_long, this keeps the 2-D (n_rollouts, N_STAGES) shape (no per-rollout explode), then
@@ -530,6 +579,10 @@ def main():
     ap.add_argument("--burn-timing", action="store_true",
                     help="per-stage burn-rate curve by variant (from the burn_a1/burn_a2 matrices "
                          "— WHEN each agent burns). Needs a sweep run after the burn-timing change.")
+    ap.add_argument("--matrix-error", action="store_true",
+                    help="planner-vs-truth miss error: scatter of matrix_miss vs brahe_miss (y=x "
+                         "agreement line) + signed-error histogram. Exposes discretization "
+                         "optimism (points above y=x = planner thinks it cleared farther than it did).")
     ap.add_argument("--to-csv", action="store_true", help="dump the tidy long DataFrame to CSV")
     args = ap.parse_args()
 
@@ -569,8 +622,14 @@ def main():
             shift_tag = f"{args.tag}_{suffix}"
         plot_miss_shift_overlay(df, shift_tag, conj_json=args.conj_json, col=args.col,
                                 pool=args.pool, density=args.density, alpha=args.alpha)
+    if args.matrix_error:
+        err_tag = args.tag
+        if filters:
+            suffix = "_".join(f"{k}{v}" for k, v in sorted(filters.items()))
+            err_tag = f"{args.tag}_{suffix}"
+        plot_matrix_error(df, err_tag)
     if not (args.to_csv or args.hist or args.violin or args.miss_shift
-            or args.miss_shift_overlay):
+            or args.miss_shift_overlay or args.matrix_error):
         # default: print per-variant summary so a bare call is still useful
         import pandas as pd
         with pd.option_context("display.width", 120):
