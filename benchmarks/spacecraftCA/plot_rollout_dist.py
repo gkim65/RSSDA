@@ -314,14 +314,21 @@ def _present_families(df, families=INIT_FAMILIES, pool=False):
 
 def _shared_edges(df, col, conj_json, families, bins):
     """A common set of histogram bin edges across every panel so before/after and
-    variant-to-variant are visually comparable."""
+    variant-to-variant are visually comparable. The lower edge is floored at the smallest
+    initial-miss family value (with a little margin) so every 'Initial N km' reference line
+    sits inside its panel rather than being clipped against the left spine -- the 1 km family
+    line in particular was landing right on the edge when the range clipped to the final misses."""
     finite = df[col].to_numpy()
     finite = finite[np.isfinite(finite)]
+    init_min = None
     if conj_json:
         ref = _initial_by_family(conj_json, families)
         if ref:
             finite = np.concatenate([finite] + [v for v in ref.values()])
+            init_min = min(float(np.min(v)) for v in ref.values())
     lo, hi = np.nanpercentile(finite, [0.5, 99.5])
+    if init_min is not None:
+        lo = min(lo, init_min - 0.5)     # keep the smallest initial line off the left spine
     return np.linspace(lo, hi, bins + 1)
 
 
@@ -344,12 +351,11 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
     ref = _initial_by_family(conj_json, families) if conj_json else {}
 
     ncol = len(fams)
-    # Compact-but-not-cramped layout: ~2.7" per panel (a middle ground between the original 4.6"
-    # and the very-thin 1.9"), so a 4-across row is ~11" wide -- fits a wide/landscape slot while
-    # each panel keeps enough room for the histograms and labels. Fonts scale with it.
-    fig_w = min(11.0, 2.7 * ncol + 0.6)    # ~11" for 4 panels; narrower for fewer
+    # Panel width ~4.0" (close to the original 4.6", just a bit tighter) so a 4-across row is
+    # ~16" wide -- roomy panels for the histograms/labels; fonts sized to match.
+    fig_w = 4.0 * ncol + 0.6
     fig_h = 4.0
-    fs = 11.0 if ncol >= 4 else 11.5        # base font size for this layout
+    fs = 11.5
     fig, axes = plt.subplots(1, ncol, figsize=(fig_w, fig_h), sharey=True, squeeze=False)
     axes = axes[0]
     for c, fam in enumerate(fams):
