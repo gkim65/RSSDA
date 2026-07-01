@@ -111,14 +111,16 @@ def plot_violin(df, tag, col="brahe_miss_km"):
 INIT_FAMILIES = [1.0, 2.0, 5.0, 10.0]
 # color per variant (final histogram); the "initial spread" reference is always grey.
 _VARIANT_COLORS = {"centralized": "#1f77b4", "sdec": "#2ca02c", "dec": "#d62728"}
-# per-variant line style + draw order. Centralized and SDec produce near-identical final
-# distributions (SDec with all GS contacts recovers the centralized policy), so SDec is drawn
-# solid FIRST and centralized is overlaid LAST as a thin DASHED line on top -- the two curves
-# visibly trace each other instead of one hiding under the other. (ls, lw, zorder)
+# per-variant line style + hatch + draw order. Centralized and SDec produce near-identical
+# final distributions (SDec with all GS contacts recovers the centralized policy), so they get
+# OPPOSITE-DIRECTION hatches ('///' vs '\\\') that cross in the overlap region -- you can see
+# both textures where the two coincide instead of one hiding under the other. Dec is left as a
+# plain fill (no hatch) so its separate right-shifted mass reads as a solid block. Centralized
+# is drawn LAST with a dashed outline on top. (ls, lw, zorder, hatch)
 _VARIANT_STYLE = {
-    "dec":         dict(ls="-",  lw=1.9, zorder=2),
-    "sdec":        dict(ls="-",  lw=2.4, zorder=3),
-    "centralized": dict(ls="--", lw=1.4, zorder=4),
+    "dec":         dict(ls="-",  lw=1.9, zorder=2, hatch=None),
+    "sdec":        dict(ls="-",  lw=2.4, zorder=3, hatch="///"),
+    "centralized": dict(ls="--", lw=1.4, zorder=4, hatch="\\\\\\"),
 }
 # draw dec, then sdec, then centralized-dashed-on-top (regardless of alphabetical order).
 _DRAW_ORDER = ["dec", "sdec", "centralized"]
@@ -280,10 +282,12 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
             style = _VARIANT_STYLE.get(v, dict(ls="-", lw=1.6, zorder=2))
             color = _VARIANT_COLORS.get(v, "0.2")
             vals = sub[col].to_numpy()
-            # filled body: semi-transparent so overlaps blend into a combined color.
+            # filled body: semi-transparent so overlaps blend into a combined color. sdec and
+            # centralized carry opposite-direction hatches (colored to match the variant) so the
+            # two textures cross where the distributions coincide.
             ax.hist(vals, bins=edges, histtype="stepfilled", density=density,
-                    facecolor=color, alpha=alpha, edgecolor="none",
-                    zorder=style["zorder"], label=f"{v} (n={len(sub)})")
+                    facecolor=color, alpha=alpha, edgecolor=color, hatch=style.get("hatch"),
+                    linewidth=0.0, zorder=style["zorder"], label=f"{v} (n={len(sub)})")
             # outline on the outer edge so each variant's shape stays readable through the
             # blended fills. Centralized uses a dashed outline drawn on top; others solid black.
             edgecolor = color if v == "centralized" else "black"
