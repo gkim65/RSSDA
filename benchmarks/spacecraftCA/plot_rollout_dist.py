@@ -123,7 +123,7 @@ _VARIANT_COLORS = {"centralized": "#1f77b4", "sdec": "#2ca02c", "dec": "#d62728"
 # ls uses an explicit (on, off) dash pattern so centralized reads as short '- - -' dashes.
 _VARIANT_STYLE = {
     "dec":         dict(ls="-", lw=1.9, zorder=2, hatch=None,     face="self", outline="#7f0000"),
-    "sdec":        dict(ls="-", lw=2.4, zorder=3, hatch=None,     face="self", outline="black"),
+    "sdec":        dict(ls="-", lw=2.4, zorder=3, hatch=None,     face="self", outline="#0b4d0b"),
     "centralized": dict(ls=(0, (4, 3)), lw=1.8, zorder=4, hatch="\\\\\\", face="none", outline="self"),
 }
 # draw dec, then sdec, then centralized-dashed-on-top (regardless of alphabetical order).
