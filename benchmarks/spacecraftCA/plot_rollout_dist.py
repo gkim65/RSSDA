@@ -205,6 +205,81 @@ def plot_miss_shift(df, tag, conj_json=None, col="brahe_miss_km", bins=40, famil
     _save(fig, tag, "miss_shift")
 
 
+def _present_families(df, families=INIT_FAMILIES, pool=False):
+    """Tag each row of `df` with its starting-miss family (_fam) and return (df, fam_list).
+    With pool=True (or when no cell snaps to a design family) everything collapses to a
+    single 'all' family so the figure is one column."""
+    df = df.copy()
+    if pool:
+        df["_fam"] = "all"
+        return df, ["all"]
+    df["_fam"] = df["miss_km"].map(lambda m: _nearest_family(m, families))
+    present = [f for f in families if (df["_fam"] == f).any()]
+    if not present:
+        df["_fam"] = "all"
+        return df, ["all"]
+    return df, present
+
+
+def _shared_edges(df, col, conj_json, families, bins):
+    """A common set of histogram bin edges across every panel so before/after and
+    variant-to-variant are visually comparable."""
+    finite = df[col].to_numpy()
+    finite = finite[np.isfinite(finite)]
+    if conj_json:
+        ref = _initial_by_family(conj_json, families)
+        if ref:
+            finite = np.concatenate([finite] + [v for v in ref.values()])
+    lo, hi = np.nanpercentile(finite, [0.5, 99.5])
+    return np.linspace(lo, hi, bins + 1)
+
+
+def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=40,
+                            families=INIT_FAMILIES, pool=False, density=False):
+    """OVERLAY variant of the miss-shift figure: all three variants drawn on ONE panel per
+    starting-miss family (step outlines so overlap is legible), so the Cen≈SDec vs Dec gap
+    reads directly. The initial miss is a dashed vertical line per family (not a swamped
+    13-count histogram). With pool=True the four families collapse to a single panel
+    (your 3-rows->1-panel 'all pooled' variation). density=True normalizes each variant to
+    unit area so differently-sized samples are comparable."""
+    import matplotlib.pyplot as plt
+    df, fams = _present_families(df, families, pool)
+    variants = sorted(df["variant"].unique())
+    edges = _shared_edges(df, col, conj_json, families, bins)
+    ref = _initial_by_family(conj_json, families) if conj_json else {}
+
+    ncol = len(fams)
+    fig, axes = plt.subplots(1, ncol, figsize=(4.6 * ncol, 4.0), sharey=True, squeeze=False)
+    axes = axes[0]
+    for c, fam in enumerate(fams):
+        ax = axes[c]
+        for v in variants:
+            sub = df[(df["variant"] == v) & (df["_fam"] == fam)]
+            if not len(sub):
+                continue
+            ax.hist(sub[col].to_numpy(), bins=edges, histtype="step", linewidth=1.9,
+                    density=density, color=_VARIANT_COLORS.get(v, "0.2"),
+                    label=f"{v} (n={len(sub)})")
+        # initial reference line(s)
+        if isinstance(fam, float):
+            ax.axvline(fam, color="0.4", ls="--", lw=1.4, label=f"initial {fam:g} km")
+        elif ref:
+            for fv in ref:
+                ax.axvline(fv, color="0.6", ls="--", lw=1.0)
+        ax.axvline(1.0, color="k", ls=":", lw=1)
+        ax.axvspan(4.0, 7.0, color="green", alpha=0.07)
+        ax.set_title(f"{fam:g} km start" if isinstance(fam, float) else "all starts pooled",
+                     fontsize=10)
+        ax.set_xlabel(col, fontsize=9)
+        if c == 0:
+            ax.set_ylabel("density" if density else "rollouts", fontsize=9)
+        ax.legend(fontsize=7, loc="upper right")
+
+    fig.suptitle(f"final {col} by variant{' (pooled)' if pool else ''} — {tag}", fontsize=11)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    _save(fig, tag, "miss_shift_overlay_pooled" if pool else "miss_shift_overlay")
+
+
 def load_burns(tag, out_dir=None, filters=None):
     """Glob the tag's .npz dumps and stack the per-stage burn matrices per variant. Unlike
     load_long, this keeps the 2-D (n_rollouts, N_STAGES) shape (no per-rollout explode), then
@@ -275,6 +350,15 @@ def main():
     ap.add_argument("--miss-shift", action="store_true",
                     help="before->after grid: rows=variant, cols=initial-miss family "
                          "(1/2/5/10 km). Pass --conj-json for the recomputed initial spread.")
+    ap.add_argument("--miss-shift-overlay", action="store_true",
+                    help="all variants overlaid on one panel per starting-miss family (step "
+                         "outlines); initial miss as a dashed vertical line. The Cen/SDec/Dec "
+                         "comparison figure.")
+    ap.add_argument("--pool", action="store_true",
+                    help="collapse the 4 starting-miss families into a single panel "
+                         "(the 3-variants-1-panel pooled view). Applies to --miss-shift-overlay.")
+    ap.add_argument("--density", action="store_true",
+                    help="normalize histograms to unit area (density) instead of raw counts.")
     ap.add_argument("--conj-json", default=None,
                     help="conj_sweep_*.json to recompute the initial (no-maneuver) miss "
                          "spread from, for the --miss-shift reference histograms.")
@@ -313,7 +397,15 @@ def main():
             suffix = "_".join(f"{k}{v}" for k, v in sorted(filters.items()))
             shift_tag = f"{args.tag}_{suffix}"
         plot_miss_shift(df, shift_tag, conj_json=args.conj_json, col=args.col)
-    if not (args.to_csv or args.hist or args.violin or args.miss_shift):
+    if args.miss_shift_overlay:
+        shift_tag = args.tag
+        if filters:
+            suffix = "_".join(f"{k}{v}" for k, v in sorted(filters.items()))
+            shift_tag = f"{args.tag}_{suffix}"
+        plot_miss_shift_overlay(df, shift_tag, conj_json=args.conj_json, col=args.col,
+                                pool=args.pool, density=args.density)
+    if not (args.to_csv or args.hist or args.violin or args.miss_shift
+            or args.miss_shift_overlay):
         # default: print per-variant summary so a bare call is still useful
         import pandas as pd
         with pd.option_context("display.width", 120):
