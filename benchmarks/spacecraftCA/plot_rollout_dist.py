@@ -111,6 +111,25 @@ def plot_violin(df, tag, col="brahe_miss_km"):
 INIT_FAMILIES = [1.0, 2.0, 5.0, 10.0]
 # color per variant (final histogram); the "initial spread" reference is always grey.
 _VARIANT_COLORS = {"centralized": "#1f77b4", "sdec": "#2ca02c", "dec": "#d62728"}
+# per-variant line style + draw order. Centralized and SDec produce near-identical final
+# distributions (SDec with all GS contacts recovers the centralized policy), so SDec is drawn
+# solid FIRST and centralized is overlaid LAST as a thin DASHED line on top -- the two curves
+# visibly trace each other instead of one hiding under the other. (ls, lw, zorder)
+_VARIANT_STYLE = {
+    "dec":         dict(ls="-",  lw=1.9, zorder=2),
+    "sdec":        dict(ls="-",  lw=2.4, zorder=3),
+    "centralized": dict(ls="--", lw=1.4, zorder=4),
+}
+# draw dec, then sdec, then centralized-dashed-on-top (regardless of alphabetical order).
+_DRAW_ORDER = ["dec", "sdec", "centralized"]
+
+
+def _ordered_variants(variants):
+    """Order present variants for drawing: known ones by _DRAW_ORDER (so centralized is last /
+    on top), any unknown ones appended alphabetically."""
+    known = [v for v in _DRAW_ORDER if v in variants]
+    rest = sorted(v for v in variants if v not in _DRAW_ORDER)
+    return known + rest
 
 
 def _nearest_family(miss, families=INIT_FAMILIES, tol=0.35):
@@ -235,16 +254,17 @@ def _shared_edges(df, col, conj_json, families, bins):
 
 
 def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=40,
-                            families=INIT_FAMILIES, pool=False, density=False):
+                            families=INIT_FAMILIES, pool=False, density=False, alpha=0.45):
     """OVERLAY variant of the miss-shift figure: all three variants drawn on ONE panel per
-    starting-miss family (step outlines so overlap is legible), so the Cen≈SDec vs Dec gap
-    reads directly. The initial miss is a dashed vertical line per family (not a swamped
-    13-count histogram). With pool=True the four families collapse to a single panel
-    (your 3-rows->1-panel 'all pooled' variation). density=True normalizes each variant to
-    unit area so differently-sized samples are comparable."""
+    starting-miss family, as FILLED semi-transparent histograms with edge outlines, so overlap
+    regions blend into a combined color. dec/sdec get solid black outlines; centralized is
+    overlaid LAST as a DASHED outline (also alpha-filled) on top -- so you can see it tracing
+    over SDec where the two coincide. The initial miss is a dashed vertical line per family.
+    With pool=True the four families collapse to a single panel; density=True normalizes each
+    variant to unit area; alpha controls fill transparency."""
     import matplotlib.pyplot as plt
     df, fams = _present_families(df, families, pool)
-    variants = sorted(df["variant"].unique())
+    variants = _ordered_variants(df["variant"].unique())
     edges = _shared_edges(df, col, conj_json, families, bins)
     ref = _initial_by_family(conj_json, families) if conj_json else {}
 
@@ -257,9 +277,19 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
             sub = df[(df["variant"] == v) & (df["_fam"] == fam)]
             if not len(sub):
                 continue
-            ax.hist(sub[col].to_numpy(), bins=edges, histtype="step", linewidth=1.9,
-                    density=density, color=_VARIANT_COLORS.get(v, "0.2"),
-                    label=f"{v} (n={len(sub)})")
+            style = _VARIANT_STYLE.get(v, dict(ls="-", lw=1.6, zorder=2))
+            color = _VARIANT_COLORS.get(v, "0.2")
+            vals = sub[col].to_numpy()
+            # filled body: semi-transparent so overlaps blend into a combined color.
+            ax.hist(vals, bins=edges, histtype="stepfilled", density=density,
+                    facecolor=color, alpha=alpha, edgecolor="none",
+                    zorder=style["zorder"], label=f"{v} (n={len(sub)})")
+            # outline on the outer edge so each variant's shape stays readable through the
+            # blended fills. Centralized uses a dashed outline drawn on top; others solid black.
+            edgecolor = color if v == "centralized" else "black"
+            ax.hist(vals, bins=edges, histtype="step", density=density,
+                    edgecolor=edgecolor, linewidth=style["lw"], linestyle=style["ls"],
+                    zorder=style["zorder"] + 3)
         # initial reference line(s)
         if isinstance(fam, float):
             ax.axvline(fam, color="0.4", ls="--", lw=1.4, label=f"initial {fam:g} km")
@@ -359,6 +389,8 @@ def main():
                          "(the 3-variants-1-panel pooled view). Applies to --miss-shift-overlay.")
     ap.add_argument("--density", action="store_true",
                     help="normalize histograms to unit area (density) instead of raw counts.")
+    ap.add_argument("--alpha", type=float, default=0.45,
+                    help="fill transparency for the overlay histograms (default 0.45).")
     ap.add_argument("--conj-json", default=None,
                     help="conj_sweep_*.json to recompute the initial (no-maneuver) miss "
                          "spread from, for the --miss-shift reference histograms.")
@@ -403,7 +435,7 @@ def main():
             suffix = "_".join(f"{k}{v}" for k, v in sorted(filters.items()))
             shift_tag = f"{args.tag}_{suffix}"
         plot_miss_shift_overlay(df, shift_tag, conj_json=args.conj_json, col=args.col,
-                                pool=args.pool, density=args.density)
+                                pool=args.pool, density=args.density, alpha=args.alpha)
     if not (args.to_csv or args.hist or args.violin or args.miss_shift
             or args.miss_shift_overlay):
         # default: print per-variant summary so a bare call is still useful
