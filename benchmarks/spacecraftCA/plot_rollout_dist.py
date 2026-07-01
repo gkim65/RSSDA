@@ -177,6 +177,13 @@ def plot_violin(df, tag, col="brahe_miss_km"):
 INIT_FAMILIES = [1.0, 2.0, 5.0, 10.0]
 # color per variant (final histogram); the "initial spread" reference is always grey.
 _VARIANT_COLORS = {"centralized": "#1f77b4", "sdec": "#2ca02c", "dec": "#d62728"}
+# pretty display names for legends (raw cell-key values -> paper labels).
+_VARIANT_LABELS = {"centralized": "Centralized", "sdec": "Semi-Decentralized",
+                   "dec": "Decentralized"}
+
+
+def _variant_label(v):
+    return _VARIANT_LABELS.get(v, v)
 # per-variant line style + hatch + draw order. Centralized and SDec produce near-identical
 # final distributions (SDec with all GS contacts recovers the centralized policy), so they get
 # OPPOSITE-DIRECTION hatches ('///' vs '\\\') that cross in the overlap region -- you can see
@@ -355,7 +362,7 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
     # ~16" wide. Fonts are set LARGE (fs~20) because the figure is scaled down ~2x to fit an
     # 8.5x11 page -- at that reduction the on-page text reads like ~11pt.
     fig_w = 4.0 * ncol + 0.6
-    fig_h = 4.0
+    fig_h = 5.0                # taller: extra headroom above the bars for the legend
     fs = 20.0
     fig, axes = plt.subplots(1, ncol, figsize=(fig_w, fig_h), sharey=True, squeeze=False)
     axes = axes[0]
@@ -382,13 +389,13 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
                 ax.hist(vals, bins=edges, histtype="stepfilled", density=density,
                         facecolor=facecolor, alpha=bg_alpha, edgecolor="none",
                         zorder=style["zorder"],
-                        label=(f"{v}" if hatch is None else None))
+                        label=(_variant_label(v) if hatch is None else None))
             # (2) hatch-only layer at 0.8 alpha on top -- bold colored hatch (kept independent of
             # the faint background alpha); carries the legend entry.
             if hatch is not None:
                 ax.hist(vals, bins=edges, histtype="stepfilled", density=density,
                         facecolor="none", edgecolor=color, hatch=hatch, linewidth=0.0,
-                        alpha=0.8, zorder=style["zorder"] + 1, label=f"{v}")
+                        alpha=0.8, zorder=style["zorder"] + 1, label=_variant_label(v))
             # crisp outer outline (per-variant color): dec maroon, sdec black, centralized its own
             # blue short-dashed line drawn on top so it's distinguishable where it traces over sdec.
             outline_color = color if style.get("outline") == "self" else style.get("outline", "black")
@@ -398,7 +405,14 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
         # initial reference line: where this family's conjunctions STARTED (no collision line --
         # the labeled safe band below is the reference; nothing lands near 1 km anyway).
         if isinstance(fam, float):
-            ax.axvline(fam, color="0.4", ls="--", lw=1.4, label=f"Initial {fam:g} km")
+            # dashed line at the family's starting miss, annotated INLINE (like the "Ideal zone"
+            # label). No legend entry -- a single last-panel legend would otherwise show only one
+            # family's "Initial N km".
+            ax.axvline(fam, color="0.4", ls="--", lw=1.4)
+            ax.text(fam, 0.5, f"Initial {fam:g} km", transform=ax.get_xaxis_transform(),
+                    ha="center", va="center", rotation=90, fontsize=fs - 4.0, color="0.35",
+                    style="italic", zorder=5,
+                    bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="none", alpha=0.7))
         elif ref:
             for fv in ref:
                 ax.axvline(fv, color="0.6", ls="--", lw=1.0)
@@ -406,7 +420,7 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
         ax.axvspan(4.0, 7.0, color="green", alpha=0.07)
         if c == 0:
             ax.text(5.5, 0.97, "Ideal zone\nat TCA", transform=ax.get_xaxis_transform(),
-                    ha="center", va="top", fontsize=fs - 1.5, color="#0b4d0b",
+                    ha="center", va="top", fontsize=fs - 3.5, color="#0b4d0b",
                     style="italic", zorder=1)
         ax.set_title(f"Initial miss: {fam:g} km" if isinstance(fam, float) else "All starts pooled",
                      fontsize=fs)
@@ -414,8 +428,15 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
         if c == 0:
             ax.set_ylabel("Density" if density else "Rollouts", fontsize=fs)
         ax.tick_params(labelsize=fs - 1.5)
-        ax.legend(fontsize=fs - 2.0, loc="upper right", handlelength=1.4,
-                  borderpad=0.4, labelspacing=0.3)
+        # raise the y-ceiling to ~1000 (counts) so the legend clears the tallest bars -- same
+        # y-scaling, just extra empty headroom at the top. (density mode keeps its auto range.)
+        if not density:
+            ax.set_ylim(top=1000)
+        # legend only on the LAST panel, so the earlier panels stay clear (and the top-left
+        # "Ideal zone" label isn't competing with a legend).
+        if c == ncol - 1:
+            ax.legend(fontsize=fs - 3.5, loc="upper right", handlelength=1.4,
+                      borderpad=0.4, labelspacing=0.3)
 
     fig.suptitle(f"Final {_col_label(col)} by variant{' (pooled)' if pool else ''}",
                  fontsize=fs + 1.5)
