@@ -28,6 +28,42 @@ import numpy as np
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
+
+# --------------------------------------------------------------------------
+# Typography: match the paper figures (Computer Modern serif). Uses real LaTeX
+# if `latex` is on PATH, else matplotlib's mathtext-cm. Mirrors plot_v2_concept
+# so labels here share the paper body's serif. Idempotent; call once at import.
+# --------------------------------------------------------------------------
+def _setup_typography():
+    import shutil
+    import matplotlib.pyplot as plt
+    common = {
+        "font.family": "serif",
+        "mathtext.fontset": "cm",
+        "axes.titlesize": 12,
+        "axes.labelsize": 12,
+        "font.size": 11,
+        "savefig.dpi": 300,
+    }
+    if shutil.which("latex"):
+        try:
+            plt.rcParams.update({"text.usetex": True,
+                                 "font.serif": ["Computer Modern Roman"], **common})
+            fig = plt.figure(); fig.text(0.5, 0.5, r"$\delta T$"); fig.canvas.draw()
+            plt.close(fig)
+            print("[typography] using real LaTeX (Computer Modern)")
+            return
+        except Exception as e:
+            plt.rcParams["text.usetex"] = False
+            print(f"[typography] LaTeX render failed ({e}); falling back to mathtext-cm")
+    plt.rcParams.update({"text.usetex": False,
+                         "font.serif": ["CMU Serif", "cmr10", "STIXGeneral", "DejaVu Serif"],
+                         **common})
+    print("[typography] using mathtext Computer Modern (no usetex)")
+
+
+_setup_typography()
+
 # Cell-key field order — MUST match _conj_worker._cell_key / sweep_driver.cell_key.
 KEY_FIELDS = ["label", "miss_km", "angle_deg", "v_rel_ms", "init_miss", "init_spread", "variant"]
 # numeric per-rollout SCALAR arrays stored in each .npz (besides cell_key). These are the
@@ -71,14 +107,44 @@ def load_long(tag, out_dir=None, filters=None):
     return df
 
 
-def _save(fig, tag, name):
-    out = os.path.join(_HERE, "notes", "figures", f"rollout_{name}_{tag}.png")
-    os.makedirs(os.path.dirname(out), exist_ok=True)
-    fig.savefig(out, dpi=140, bbox_inches="tight")
-    print(f"wrote {out}")
+# pretty axis labels per column (avoids raw underscore-laden field names in the figure).
+_COL_LABELS = {
+    "brahe_miss_km": "miss distance at TCA (km)",
+    "total_dv": r"total $\Delta v$ (m/s)",
+    "n_burns": "number of burns",
+    "true_term_reward": "terminal reward",
+}
 
 
-def plot_hist(df, tag, col="brahe_miss_km", bins=40):
+def _tex_safe(s):
+    """Escape underscores so raw strings (tags, field names) don't turn into LaTeX subscripts
+    when text.usetex is on. No-op when usetex is off, but harmless either way."""
+    import matplotlib.pyplot as plt
+    return s.replace("_", r"\_") if plt.rcParams.get("text.usetex") else s
+
+
+def _col_label(col):
+    return _COL_LABELS.get(col, _tex_safe(col))
+
+
+def _save(fig, tag, name, vector=True, transparent=False, exts=(".pdf", ".svg")):
+    """Save `rollout_<name>_<tag>.png` plus, when vector=True, crisp vector copies (PDF for the
+    paper, SVG for slides/web) at the same base name -- matching the FIGURES.md convention. Set
+    transparent=True to drop the figure onto any slide/page color."""
+    fig_dir = os.path.join(_HERE, "notes", "figures")
+    os.makedirs(fig_dir, exist_ok=True)
+    base = os.path.join(fig_dir, f"rollout_{name}_{tag}.png")
+    saved = [base]
+    fig.savefig(base, dpi=200, bbox_inches="tight", transparent=transparent)
+    if vector:
+        for ext in exts:
+            vpath = os.path.splitext(base)[0] + ext
+            fig.savefig(vpath, bbox_inches="tight", transparent=transparent)
+            saved.append(vpath)
+    print("wrote " + ", ".join(saved))
+
+
+def plot_hist(df, tag, col="Miss distance at TCA", bins=40):
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(8, 5))
     lo, hi = np.nanpercentile(df[col], [0.5, 99.5])
@@ -86,13 +152,13 @@ def plot_hist(df, tag, col="brahe_miss_km", bins=40):
     for v, g in df.groupby("variant"):
         ax.hist(g[col], bins=edges, histtype="step", linewidth=1.8, label=f"{v} (n={len(g)})")
     ax.axvline(1.0, color="k", ls=":", lw=1, label="collision (1 km)")
-    ax.axvspan(4.0, 7.0, color="green", alpha=0.07, label="safe band 4-7 km")
-    ax.set_xlabel(col); ax.set_ylabel("rollouts"); ax.set_title(f"{col} distribution by variant — {tag}")
+    ax.axvspan(4.0, 7.0, color="green", alpha=0.07, label="Safe band 4-7 km")
+    ax.set_xlabel(col); ax.set_ylabel("Rollouts"); ax.set_title(f"{col} distribution by variant — {tag}")
     ax.legend(fontsize=8)
     _save(fig, tag, f"hist_{col}")
 
 
-def plot_violin(df, tag, col="brahe_miss_km"):
+def plot_violin(df, tag, col="Miss distance at TCA"):
     import matplotlib.pyplot as plt
     variants = sorted(df["variant"].unique())
     data = [df[df["variant"] == v][col].values for v in variants]
@@ -217,7 +283,7 @@ def plot_miss_shift(df, tag, conj_json=None, col="brahe_miss_km", bins=40, famil
             ax.axvline(1.0, color="k", ls=":", lw=1)
             ax.axvspan(4.0, 7.0, color="green", alpha=0.07)
             if r == 0:
-                title = f"{fam:g} km start" if isinstance(fam, float) else "all"
+                title = f"{fam:g} km Start" if isinstance(fam, float) else "all"
                 ax.set_title(title, fontsize=10)
             if c == 0:
                 ax.set_ylabel(f"{v}\nrollouts", fontsize=9)
@@ -316,22 +382,28 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
             ax.hist(vals, bins=edges, histtype="step", density=density,
                     edgecolor=outline_color, linewidth=style["lw"], linestyle=style["ls"],
                     zorder=style["zorder"] + 3)
-        # initial reference line(s)
+        # initial reference line: where this family's conjunctions STARTED (no collision line --
+        # the labeled safe band below is the reference; nothing lands near 1 km anyway).
         if isinstance(fam, float):
             ax.axvline(fam, color="0.4", ls="--", lw=1.4, label=f"initial {fam:g} km")
         elif ref:
             for fv in ref:
                 ax.axvline(fv, color="0.6", ls="--", lw=1.0)
-        ax.axvline(1.0, color="k", ls=":", lw=1)
+        # ideal-outcome zone at TCA (labeled once, top-left panel, floating in the band).
         ax.axvspan(4.0, 7.0, color="green", alpha=0.07)
-        ax.set_title(f"{fam:g} km start" if isinstance(fam, float) else "all starts pooled",
-                     fontsize=10)
-        ax.set_xlabel(col, fontsize=9)
         if c == 0:
-            ax.set_ylabel("density" if density else "rollouts", fontsize=9)
+            ax.text(5.5, 0.97, "ideal zone\nat TCA", transform=ax.get_xaxis_transform(),
+                    ha="center", va="top", fontsize=8, color="#0b4d0b",
+                    style="italic", zorder=1)
+        ax.set_title(f"{fam:g} km start" if isinstance(fam, float) else "all starts pooled",
+                     fontsize=11)
+        ax.set_xlabel(_col_label(col), fontsize=10)
+        if c == 0:
+            ax.set_ylabel("density" if density else "rollouts", fontsize=10)
         ax.legend(fontsize=7, loc="upper right")
 
-    fig.suptitle(f"final {col} by variant{' (pooled)' if pool else ''} — {tag}", fontsize=11)
+    fig.suptitle(f"final {_col_label(col)} by variant{' (pooled)' if pool else ''}",
+                 fontsize=12)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     _save(fig, tag, "miss_shift_overlay_pooled" if pool else "miss_shift_overlay")
 
