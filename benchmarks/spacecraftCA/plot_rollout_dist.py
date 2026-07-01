@@ -109,10 +109,10 @@ def load_long(tag, out_dir=None, filters=None):
 
 # pretty axis labels per column (avoids raw underscore-laden field names in the figure).
 _COL_LABELS = {
-    "brahe_miss_km": "miss distance at TCA (km)",
-    "total_dv": r"total $\Delta v$ (m/s)",
-    "n_burns": "number of burns",
-    "true_term_reward": "terminal reward",
+    "brahe_miss_km": "Miss distance at TCA (km)",
+    "total_dv": r"Total $\Delta v$ (m/s)",
+    "n_burns": "Number of burns",
+    "true_term_reward": "Terminal reward",
 }
 
 
@@ -144,31 +144,31 @@ def _save(fig, tag, name, vector=True, transparent=False, exts=(".pdf", ".svg"))
     print("wrote " + ", ".join(saved))
 
 
-def plot_hist(df, tag, col="Miss distance at TCA", bins=40):
+def plot_hist(df, tag, col="brahe_miss_km", bins=40):
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(8, 5))
     lo, hi = np.nanpercentile(df[col], [0.5, 99.5])
     edges = np.linspace(lo, hi, bins + 1)
     for v, g in df.groupby("variant"):
         ax.hist(g[col], bins=edges, histtype="step", linewidth=1.8, label=f"{v} (n={len(g)})")
-    ax.axvline(1.0, color="k", ls=":", lw=1, label="collision (1 km)")
-    ax.axvspan(4.0, 7.0, color="green", alpha=0.07, label="Safe band 4-7 km")
-    ax.set_xlabel(col); ax.set_ylabel("Rollouts"); ax.set_title(f"{col} distribution by variant — {tag}")
+    ax.axvspan(4.0, 7.0, color="green", alpha=0.07, label="Ideal zone at TCA (4--7 km)")
+    ax.set_xlabel(_col_label(col)); ax.set_ylabel("Rollouts")
+    ax.set_title(f"{_col_label(col)} distribution by variant")
     ax.legend(fontsize=8)
     _save(fig, tag, f"hist_{col}")
 
 
-def plot_violin(df, tag, col="Miss distance at TCA"):
+def plot_violin(df, tag, col="brahe_miss_km"):
     import matplotlib.pyplot as plt
     variants = sorted(df["variant"].unique())
     data = [df[df["variant"] == v][col].values for v in variants]
     fig, ax = plt.subplots(figsize=(7, 5))
     ax.violinplot(data, showmedians=True)
     ax.set_xticks(range(1, len(variants) + 1)); ax.set_xticklabels(variants)
-    ax.axhline(1.0, color="k", ls=":", lw=1)
     ax.axhspan(4.0, 7.0, color="green", alpha=0.07)
-    ax.set_ylabel(col); ax.set_title(f"{col} by variant — {tag}")
+    ax.set_ylabel(_col_label(col)); ax.set_title(f"{_col_label(col)} by variant")
     _save(fig, tag, f"violin_{col}")
+    # (title/labels already start capitalized via _col_label)
 
 
 # The conj_sweep_spherical_50.json geometries were built at 4 discrete target misses
@@ -273,25 +273,25 @@ def plot_miss_shift(df, tag, conj_json=None, col="brahe_miss_km", bins=40, famil
             # initial reference for this family (recomputed misses if available)
             if isinstance(fam, float) and fam in init_ref:
                 ax.hist(init_ref[fam], bins=edges, color="0.6", alpha=0.55,
-                        label=f"initial (n={len(init_ref[fam])})")
+                        label=f"Initial (n={len(init_ref[fam])})")
             elif isinstance(fam, float):
-                ax.axvline(fam, color="0.5", ls="--", lw=1.2, label="initial (target)")
+                ax.axvline(fam, color="0.5", ls="--", lw=1.2, label="Initial (target)")
             # final distribution for this variant/family
             if len(sub):
                 ax.hist(sub[col].to_numpy(), bins=edges, color=_VARIANT_COLORS.get(v, "0.2"),
                         alpha=0.75, label=f"{v} final (n={len(sub)})")
-            ax.axvline(1.0, color="k", ls=":", lw=1)
             ax.axvspan(4.0, 7.0, color="green", alpha=0.07)
             if r == 0:
-                title = f"{fam:g} km Start" if isinstance(fam, float) else "all"
-                ax.set_title(title, fontsize=10)
+                title = f"{fam:g} km start" if isinstance(fam, float) else "All"
+                ax.set_title(title, fontsize=11)
             if c == 0:
-                ax.set_ylabel(f"{v}\nrollouts", fontsize=9)
+                ax.set_ylabel(f"{v}\nrollouts", fontsize=10)
             if r == nrow - 1:
-                ax.set_xlabel(col, fontsize=9)
+                ax.set_xlabel(_col_label(col), fontsize=10)
             ax.legend(fontsize=6, loc="upper right")
 
-    fig.suptitle(f"initial vs. final {col} by variant and starting miss — {tag}", fontsize=11)
+    fig.suptitle(f"Initial vs. final {_col_label(col)} by variant and starting miss",
+                 fontsize=12)
     fig.tight_layout(rect=[0, 0, 1, 0.98])
     _save(fig, tag, "miss_shift")
 
@@ -385,24 +385,24 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
         # initial reference line: where this family's conjunctions STARTED (no collision line --
         # the labeled safe band below is the reference; nothing lands near 1 km anyway).
         if isinstance(fam, float):
-            ax.axvline(fam, color="0.4", ls="--", lw=1.4, label=f"initial {fam:g} km")
+            ax.axvline(fam, color="0.4", ls="--", lw=1.4, label=f"Initial {fam:g} km")
         elif ref:
             for fv in ref:
                 ax.axvline(fv, color="0.6", ls="--", lw=1.0)
         # ideal-outcome zone at TCA (labeled once, top-left panel, floating in the band).
         ax.axvspan(4.0, 7.0, color="green", alpha=0.07)
         if c == 0:
-            ax.text(5.5, 0.97, "ideal zone\nat TCA", transform=ax.get_xaxis_transform(),
+            ax.text(5.5, 0.97, "Ideal zone\nat TCA", transform=ax.get_xaxis_transform(),
                     ha="center", va="top", fontsize=8, color="#0b4d0b",
                     style="italic", zorder=1)
-        ax.set_title(f"{fam:g} km start" if isinstance(fam, float) else "all starts pooled",
+        ax.set_title(f"{fam:g} km start" if isinstance(fam, float) else "All starts pooled",
                      fontsize=11)
         ax.set_xlabel(_col_label(col), fontsize=10)
         if c == 0:
-            ax.set_ylabel("density" if density else "rollouts", fontsize=10)
+            ax.set_ylabel("Density" if density else "Rollouts", fontsize=10)
         ax.legend(fontsize=7, loc="upper right")
 
-    fig.suptitle(f"final {_col_label(col)} by variant{' (pooled)' if pool else ''}",
+    fig.suptitle(f"Final {_col_label(col)} by variant{' (pooled)' if pool else ''}",
                  fontsize=12)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     _save(fig, tag, "miss_shift_overlay_pooled" if pool else "miss_shift_overlay")
@@ -457,9 +457,9 @@ def plot_burn_timing(tag, out_dir=None, filters=None):
         rate = acc["burns"] / max(acc["n_rollouts"], 1)   # avg agent-burns per rollout at each stage
         ax.plot(range(acc["n_stages"]), rate, marker="o", ms=3, lw=1.8,
                 label=f"{v} (n={acc['n_rollouts']})")
-    ax.set_xlabel("decision stage (0 = T-24h start -> TCA)")
-    ax.set_ylabel("avg agent-burns per rollout at stage")
-    ax.set_title(f"burn timing by variant — {tag}")
+    ax.set_xlabel("Decision stage (0 = T-24h start $\\rightarrow$ TCA)")
+    ax.set_ylabel("Avg agent-burns per rollout at stage")
+    ax.set_title("Burn timing by variant")
     ax.grid(True, alpha=0.3)
     ax.legend(fontsize=8)
     _save(fig, tag, "burn_timing")
