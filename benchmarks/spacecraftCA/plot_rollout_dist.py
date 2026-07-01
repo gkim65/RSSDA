@@ -282,7 +282,7 @@ def plot_miss_shift(df, tag, conj_json=None, col="brahe_miss_km", bins=40, famil
                         alpha=0.75, label=f"{v} final (n={len(sub)})")
             ax.axvspan(4.0, 7.0, color="green", alpha=0.07)
             if r == 0:
-                title = f"{fam:g} km start" if isinstance(fam, float) else "All"
+                title = f"Initial Miss Distance: {fam:g} km" if isinstance(fam, float) else "All"
                 ax.set_title(title, fontsize=11)
             if c == 0:
                 ax.set_ylabel(f"{v}\nrollouts", fontsize=10)
@@ -395,7 +395,7 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
             ax.text(5.5, 0.97, "Ideal zone\nat TCA", transform=ax.get_xaxis_transform(),
                     ha="center", va="top", fontsize=8, color="#0b4d0b",
                     style="italic", zorder=1)
-        ax.set_title(f"{fam:g} km start" if isinstance(fam, float) else "All starts pooled",
+        ax.set_title(f"Initial Miss Distance: {fam:g} km" if isinstance(fam, float) else "All starts pooled",
                      fontsize=11)
         ax.set_xlabel(_col_label(col), fontsize=10)
         if c == 0:
