@@ -105,6 +105,106 @@ def plot_violin(df, tag, col="brahe_miss_km"):
     _save(fig, tag, f"violin_{col}")
 
 
+# The conj_sweep_spherical_50.json geometries were built at 4 discrete target misses
+# (families m1/m2/m5/m10). We facet the miss-shift figure by which family a rollout STARTED
+# in, so each starting level's before->after is visible instead of pooling all of them.
+INIT_FAMILIES = [1.0, 2.0, 5.0, 10.0]
+# color per variant (final histogram); the "initial spread" reference is always grey.
+_VARIANT_COLORS = {"centralized": "#1f77b4", "sdec": "#2ca02c", "dec": "#d62728"}
+
+
+def _nearest_family(miss, families=INIT_FAMILIES, tol=0.35):
+    """Snap a numeric initial miss to its nearest design family (1/2/5/10 km) within a
+    relative tolerance; return None if it doesn't belong to any (so odd cells are dropped
+    from the facet rather than silently mislabeled)."""
+    if miss is None or not np.isfinite(miss):
+        return None
+    best = min(families, key=lambda f: abs(miss - f))
+    return best if abs(miss - best) <= tol * best else None
+
+
+def _initial_by_family(json_path, families=INIT_FAMILIES):
+    """Return {family: array-of-initial-misses} from a conj-sweep JSON, using the true
+    no-maneuver closest-approach miss (conj_initial_miss.initial_misses). Only conjunctions
+    that snap to a design family are kept. This is the 'where we started' reference the
+    final distributions are drawn against."""
+    from conj_initial_miss import initial_misses
+    df = initial_misses(json_path)
+    out = {f: [] for f in families}
+    for m in df["miss_km"].to_numpy():
+        fam = _nearest_family(m, families)
+        if fam is not None:
+            out[fam].append(float(m))
+    return {f: np.array(v) for f, v in out.items() if len(v)}
+
+
+def plot_miss_shift(df, tag, conj_json=None, col="brahe_miss_km", bins=40, families=INIT_FAMILIES):
+    """Before->after miss figure: a grid of subplots, columns = initial-miss family
+    (1/2/5/10 km), rows = variant. Each subplot draws the INITIAL spread (grey, filled) that
+    the family started at, and the variant's FINAL `col` distribution (variant color, filled)
+    on top -- so you read 'started here, this method pushed it there'. Collision line (1 km)
+    and safe band (4-7 km) marked on every panel.
+
+    The initial reference comes from `conj_json` (recomputed no-maneuver misses via
+    conj_initial_miss); if not given, falls back to the cell-key `init_miss`/`miss_km` per
+    family as a rough marker line. Families with no rollouts in `df` are dropped, so a
+    single-family stand-in tag (e.g. peel_ready at 5 km) renders as one column."""
+    import matplotlib.pyplot as plt
+
+    # which families are actually present in the rollout data (snap the cell's miss_km)?
+    df = df.copy()
+    df["_fam"] = df["miss_km"].map(lambda m: _nearest_family(m, families))
+    present_fams = [f for f in families if (df["_fam"] == f).any()]
+    if not present_fams:
+        # no cell snapped to a family (unusual miss values) -> pool everything into one column
+        present_fams = ["all"]
+        df["_fam"] = "all"
+
+    variants = sorted(df["variant"].unique())
+    init_ref = _initial_by_family(conj_json, families) if conj_json else {}
+
+    # shared x-range across all panels so before/after are visually comparable
+    finite = df[col].to_numpy()
+    finite = finite[np.isfinite(finite)]
+    if conj_json and init_ref:
+        finite = np.concatenate([finite] + [v for v in init_ref.values()])
+    lo, hi = np.nanpercentile(finite, [0.5, 99.5])
+    edges = np.linspace(lo, hi, bins + 1)
+
+    nrow, ncol = len(variants), len(present_fams)
+    fig, axes = plt.subplots(nrow, ncol, figsize=(4.2 * ncol, 2.6 * nrow),
+                             sharex=True, sharey="row", squeeze=False)
+
+    for r, v in enumerate(variants):
+        for c, fam in enumerate(present_fams):
+            ax = axes[r][c]
+            sub = df[(df["variant"] == v) & (df["_fam"] == fam)]
+            # initial reference for this family (recomputed misses if available)
+            if isinstance(fam, float) and fam in init_ref:
+                ax.hist(init_ref[fam], bins=edges, color="0.6", alpha=0.55,
+                        label=f"initial (n={len(init_ref[fam])})")
+            elif isinstance(fam, float):
+                ax.axvline(fam, color="0.5", ls="--", lw=1.2, label="initial (target)")
+            # final distribution for this variant/family
+            if len(sub):
+                ax.hist(sub[col].to_numpy(), bins=edges, color=_VARIANT_COLORS.get(v, "0.2"),
+                        alpha=0.75, label=f"{v} final (n={len(sub)})")
+            ax.axvline(1.0, color="k", ls=":", lw=1)
+            ax.axvspan(4.0, 7.0, color="green", alpha=0.07)
+            if r == 0:
+                title = f"{fam:g} km start" if isinstance(fam, float) else "all"
+                ax.set_title(title, fontsize=10)
+            if c == 0:
+                ax.set_ylabel(f"{v}\nrollouts", fontsize=9)
+            if r == nrow - 1:
+                ax.set_xlabel(col, fontsize=9)
+            ax.legend(fontsize=6, loc="upper right")
+
+    fig.suptitle(f"initial vs. final {col} by variant and starting miss — {tag}", fontsize=11)
+    fig.tight_layout(rect=[0, 0, 1, 0.98])
+    _save(fig, tag, "miss_shift")
+
+
 def load_burns(tag, out_dir=None, filters=None):
     """Glob the tag's .npz dumps and stack the per-stage burn matrices per variant. Unlike
     load_long, this keeps the 2-D (n_rollouts, N_STAGES) shape (no per-rollout explode), then
@@ -172,6 +272,12 @@ def main():
                     help="subset cells, e.g. --filter variant=sdec init_miss=0.5 angle_deg=0")
     ap.add_argument("--hist", action="store_true", help="overlaid step-histogram by variant")
     ap.add_argument("--violin", action="store_true", help="violin by variant")
+    ap.add_argument("--miss-shift", action="store_true",
+                    help="before->after grid: rows=variant, cols=initial-miss family "
+                         "(1/2/5/10 km). Pass --conj-json for the recomputed initial spread.")
+    ap.add_argument("--conj-json", default=None,
+                    help="conj_sweep_*.json to recompute the initial (no-maneuver) miss "
+                         "spread from, for the --miss-shift reference histograms.")
     ap.add_argument("--burn-timing", action="store_true",
                     help="per-stage burn-rate curve by variant (from the burn_a1/burn_a2 matrices "
                          "— WHEN each agent burns). Needs a sweep run after the burn-timing change.")
@@ -199,7 +305,15 @@ def main():
         plot_hist(df, args.tag, args.col)
     if args.violin:
         plot_violin(df, args.tag, args.col)
-    if not (args.to_csv or args.hist or args.violin):
+    if args.miss_shift:
+        # fold any --filter into the tag so a belief-subset figure (e.g. init_miss=0.5)
+        # doesn't clobber the unfiltered / other-belief one.
+        shift_tag = args.tag
+        if filters:
+            suffix = "_".join(f"{k}{v}" for k, v in sorted(filters.items()))
+            shift_tag = f"{args.tag}_{suffix}"
+        plot_miss_shift(df, shift_tag, conj_json=args.conj_json, col=args.col)
+    if not (args.to_csv or args.hist or args.violin or args.miss_shift):
         # default: print per-variant summary so a bare call is still useful
         import pandas as pd
         with pd.option_context("display.width", 120):
