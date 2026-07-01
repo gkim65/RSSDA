@@ -352,10 +352,11 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
 
     ncol = len(fams)
     # Panel width ~4.0" (close to the original 4.6", just a bit tighter) so a 4-across row is
-    # ~16" wide -- roomy panels for the histograms/labels; fonts sized to match.
+    # ~16" wide. Fonts are set LARGE (fs~20) because the figure is scaled down ~2x to fit an
+    # 8.5x11 page -- at that reduction the on-page text reads like ~11pt.
     fig_w = 4.0 * ncol + 0.6
     fig_h = 4.0
-    fs = 11.5
+    fs = 20.0
     fig, axes = plt.subplots(1, ncol, figsize=(fig_w, fig_h), sharey=True, squeeze=False)
     axes = axes[0]
     for c, fam in enumerate(fams):
@@ -381,13 +382,13 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
                 ax.hist(vals, bins=edges, histtype="stepfilled", density=density,
                         facecolor=facecolor, alpha=bg_alpha, edgecolor="none",
                         zorder=style["zorder"],
-                        label=(f"{v} (n={len(sub)})" if hatch is None else None))
+                        label=(f"{v}" if hatch is None else None))
             # (2) hatch-only layer at 0.8 alpha on top -- bold colored hatch (kept independent of
             # the faint background alpha); carries the legend entry.
             if hatch is not None:
                 ax.hist(vals, bins=edges, histtype="stepfilled", density=density,
                         facecolor="none", edgecolor=color, hatch=hatch, linewidth=0.0,
-                        alpha=0.8, zorder=style["zorder"] + 1, label=f"{v} (n={len(sub)})")
+                        alpha=0.8, zorder=style["zorder"] + 1, label=f"{v}")
             # crisp outer outline (per-variant color): dec maroon, sdec black, centralized its own
             # blue short-dashed line drawn on top so it's distinguishable where it traces over sdec.
             outline_color = color if style.get("outline") == "self" else style.get("outline", "black")
