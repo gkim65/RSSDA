@@ -117,10 +117,15 @@ _VARIANT_COLORS = {"centralized": "#1f77b4", "sdec": "#2ca02c", "dec": "#d62728"
 # both textures where the two coincide instead of one hiding under the other. Dec is left as a
 # plain fill (no hatch) so its separate right-shifted mass reads as a solid block. Centralized
 # is drawn LAST with a dashed outline on top. (ls, lw, zorder, hatch)
+# face: fill background color per variant. dec = its own solid color; sdec = translucent WHITE
+# (a faint background so its green hatch reads, but low alpha lets the gridlines / safe-band
+# show through); centralized = "none" (fully CLEAR) so, drawn last on top, the green sdec
+# underneath shows through its blue hatch where the two coincide. face_alpha overrides the
+# global --alpha for that variant's fill.
 _VARIANT_STYLE = {
-    "dec":         dict(ls="-",  lw=1.9, zorder=2, hatch=None),
-    "sdec":        dict(ls="-",  lw=2.4, zorder=3, hatch="///"),
-    "centralized": dict(ls="--", lw=1.8, zorder=4, hatch="\\\\\\"),
+    "dec":         dict(ls="-",  lw=1.9, zorder=2, hatch=None,     face="self"),
+    "sdec":        dict(ls="-",  lw=2.4, zorder=3, hatch="///",    face="white", face_alpha=0.25),
+    "centralized": dict(ls="--", lw=1.8, zorder=4, hatch="\\\\\\", face="none"),
 }
 # draw dec, then sdec, then centralized-dashed-on-top (regardless of alphabetical order).
 _DRAW_ORDER = ["dec", "sdec", "centralized"]
@@ -285,15 +290,27 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
             style = _VARIANT_STYLE.get(v, dict(ls="-", lw=1.6, zorder=2))
             color = _VARIANT_COLORS.get(v, "0.2")
             vals = sub[col].to_numpy()
-            # dec is a plain solid color fill (no hatch) so its right-shifted overshoot reads as
-            # a solid block; sdec and centralized are WHITE fills with a per-variant COLORED
-            # hatch (opposite directions) so where the two coincide the crossing hatch lines stay
-            # legible instead of blending into muddy color.
+            # per-variant fill drawn in TWO layers so the background alpha and the hatch alpha are
+            # independent: (1) a background fill at low alpha (dec = its own solid color = the
+            # overshoot block; sdec = faint white; centralized = clear/skipped), then (2) a
+            # hatch-only layer at FULL alpha on top so the colored hatch stays crisp and bold no
+            # matter how faint the background is.
             hatch = style.get("hatch")
-            facecolor = color if hatch is None else "white"
-            ax.hist(vals, bins=edges, histtype="stepfilled", density=density,
-                    facecolor=facecolor, alpha=alpha, edgecolor=color, hatch=hatch,
-                    linewidth=0.0, zorder=style["zorder"], label=f"{v} (n={len(sub)})")
+            facecolor = color if style.get("face") == "self" else style.get("face", "white")
+            bg_alpha = style.get("face_alpha", alpha)
+            # (1) background fill (skipped for a clear fill). Carries the legend entry when there
+            # is no hatch layer to carry it (i.e. dec).
+            if facecolor != "none":
+                ax.hist(vals, bins=edges, histtype="stepfilled", density=density,
+                        facecolor=facecolor, alpha=bg_alpha, edgecolor="none",
+                        zorder=style["zorder"],
+                        label=(f"{v} (n={len(sub)})" if hatch is None else None))
+            # (2) hatch-only layer at 0.8 alpha on top -- bold colored hatch (kept independent of
+            # the faint background alpha); carries the legend entry.
+            if hatch is not None:
+                ax.hist(vals, bins=edges, histtype="stepfilled", density=density,
+                        facecolor="none", edgecolor=color, hatch=hatch, linewidth=0.0,
+                        alpha=0.8, zorder=style["zorder"] + 1, label=f"{v} (n={len(sub)})")
             # crisp outer outline so each shape stays readable through the crossing hatches.
             # Everything is black; centralized uses its own (blue) DASHED outline drawn on top so
             # it's distinguishable where it traces over sdec.
