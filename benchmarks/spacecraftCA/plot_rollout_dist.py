@@ -337,19 +337,19 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
     import matplotlib as mpl
     import matplotlib.pyplot as plt
     # thicker hatch lines (default is 1.0) so the /// and \\\ textures read boldly.
-    mpl.rcParams["hatch.linewidth"] = 1.6
+    mpl.rcParams["hatch.linewidth"] = 1.8
     df, fams = _present_families(df, families, pool)
     variants = _ordered_variants(df["variant"].unique())
     edges = _shared_edges(df, col, conj_json, families, bins)
     ref = _initial_by_family(conj_json, families) if conj_json else {}
 
     ncol = len(fams)
-    # Size for a portrait US-Letter (8.5x11") text column: hold the TOTAL width to ~fig_w so a
-    # 4-across row fits the page, making each panel thinner as ncol grows. Kept a touch taller so
-    # the thin panels aren't cramped, with fonts big enough to stay readable at print size.
-    fig_w = min(7.5, 1.9 * ncol + 0.6)     # ~7.5" for 4 panels; narrower for fewer
-    fig_h = 3.6
-    fs = 9.5 if ncol >= 4 else 10.5         # base font size for this compact layout
+    # Compact-but-not-cramped layout: ~2.7" per panel (a middle ground between the original 4.6"
+    # and the very-thin 1.9"), so a 4-across row is ~11" wide -- fits a wide/landscape slot while
+    # each panel keeps enough room for the histograms and labels. Fonts scale with it.
+    fig_w = min(11.0, 2.7 * ncol + 0.6)    # ~11" for 4 panels; narrower for fewer
+    fig_h = 4.0
+    fs = 11.0 if ncol >= 4 else 11.5        # base font size for this layout
     fig, axes = plt.subplots(1, ncol, figsize=(fig_w, fig_h), sharey=True, squeeze=False)
     axes = axes[0]
     for c, fam in enumerate(fams):
