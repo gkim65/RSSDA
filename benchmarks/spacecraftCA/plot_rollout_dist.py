@@ -405,20 +405,19 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
         # initial reference line: where this family's conjunctions STARTED (no collision line --
         # the labeled safe band below is the reference; nothing lands near 1 km anyway).
         if isinstance(fam, float):
-            # dashed line at the family's starting miss, annotated INLINE (like the "Ideal zone"
-            # label). No legend entry -- a single last-panel legend would otherwise show only one
-            # family's "Initial N km".
+            # dashed line at the family's starting miss, annotated INLINE ("N km") near the top of
+            # the panel. No legend entry -- a single legend would otherwise show only one family.
             ax.axvline(fam, color="0.4", ls="--", lw=1.4)
-            ax.text(fam, 0.5, f"Initial {fam:g} km", transform=ax.get_xaxis_transform(),
+            ax.text(fam, 0.80, f"{fam:g} km", transform=ax.get_xaxis_transform(),
                     ha="center", va="center", rotation=90, fontsize=fs - 4.0, color="0.35",
                     style="italic", zorder=5,
                     bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="none", alpha=0.7))
         elif ref:
             for fv in ref:
                 ax.axvline(fv, color="0.6", ls="--", lw=1.0)
-        # ideal-outcome zone at TCA (labeled once, top-left panel, floating in the band).
+        # ideal-outcome zone at TCA (labeled once, on the 2nd panel, floating in the band).
         ax.axvspan(4.0, 7.0, color="green", alpha=0.07)
-        if c == 0:
+        if c == 1:
             ax.text(5.5, 0.97, "Ideal zone\nat TCA", transform=ax.get_xaxis_transform(),
                     ha="center", va="top", fontsize=fs - 3.5, color="#0b4d0b",
                     style="italic", zorder=1)
@@ -432,9 +431,9 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
         # y-scaling, just extra empty headroom at the top. (density mode keeps its auto range.)
         if not density:
             ax.set_ylim(top=1000)
-        # legend only on the LAST panel, so the earlier panels stay clear (and the top-left
-        # "Ideal zone" label isn't competing with a legend).
-        if c == ncol - 1:
+        # legend only on the FIRST panel; the "Ideal zone" label lives on the 2nd panel so the
+        # two don't compete.
+        if c == 0:
             ax.legend(fontsize=fs - 3.5, loc="upper right", handlelength=1.4,
                       borderpad=0.4, labelspacing=0.3)
 
