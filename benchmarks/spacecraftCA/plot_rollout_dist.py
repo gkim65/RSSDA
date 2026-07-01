@@ -117,15 +117,14 @@ _VARIANT_COLORS = {"centralized": "#1f77b4", "sdec": "#2ca02c", "dec": "#d62728"
 # both textures where the two coincide instead of one hiding under the other. Dec is left as a
 # plain fill (no hatch) so its separate right-shifted mass reads as a solid block. Centralized
 # is drawn LAST with a dashed outline on top. (ls, lw, zorder, hatch)
-# face: fill background color per variant. dec = its own solid color; sdec = translucent WHITE
-# (a faint background so its green hatch reads, but low alpha lets the gridlines / safe-band
-# show through); centralized = "none" (fully CLEAR) so, drawn last on top, the green sdec
-# underneath shows through its blue hatch where the two coincide. face_alpha overrides the
-# global --alpha for that variant's fill.
+# dec and sdec are SOLID color fills (no hatch); centralized is drawn LAST as a hatch-only
+# overlay (blue \\\, clear background) plus a short-dashed blue outline on top -- so where the
+# centralized policy coincides with sdec you see the blue hatch riding over the solid green.
+# ls uses an explicit (on, off) dash pattern so centralized reads as short '- - -' dashes.
 _VARIANT_STYLE = {
-    "dec":         dict(ls="-",  lw=1.9, zorder=2, hatch=None,     face="self"),
-    "sdec":        dict(ls="-",  lw=2.4, zorder=3, hatch="///",    face="white", face_alpha=0.25),
-    "centralized": dict(ls="--", lw=1.8, zorder=4, hatch="\\\\\\", face="none"),
+    "dec":         dict(ls="-", lw=1.9, zorder=2, hatch=None,     face="self", outline="#7f0000"),
+    "sdec":        dict(ls="-", lw=2.4, zorder=3, hatch=None,     face="self", outline="black"),
+    "centralized": dict(ls=(0, (4, 3)), lw=1.8, zorder=4, hatch="\\\\\\", face="none", outline="self"),
 }
 # draw dec, then sdec, then centralized-dashed-on-top (regardless of alphabetical order).
 _DRAW_ORDER = ["dec", "sdec", "centralized"]
@@ -311,10 +310,9 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
                 ax.hist(vals, bins=edges, histtype="stepfilled", density=density,
                         facecolor="none", edgecolor=color, hatch=hatch, linewidth=0.0,
                         alpha=0.8, zorder=style["zorder"] + 1, label=f"{v} (n={len(sub)})")
-            # crisp outer outline so each shape stays readable through the crossing hatches.
-            # Everything is black; centralized uses its own (blue) DASHED outline drawn on top so
-            # it's distinguishable where it traces over sdec.
-            outline_color = color if v == "centralized" else "black"
+            # crisp outer outline (per-variant color): dec maroon, sdec black, centralized its own
+            # blue short-dashed line drawn on top so it's distinguishable where it traces over sdec.
+            outline_color = color if style.get("outline") == "self" else style.get("outline", "black")
             ax.hist(vals, bins=edges, histtype="step", density=density,
                     edgecolor=outline_color, linewidth=style["lw"], linestyle=style["ls"],
                     zorder=style["zorder"] + 3)
