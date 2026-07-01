@@ -337,14 +337,20 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
     import matplotlib as mpl
     import matplotlib.pyplot as plt
     # thicker hatch lines (default is 1.0) so the /// and \\\ textures read boldly.
-    mpl.rcParams["hatch.linewidth"] = 2.0
+    mpl.rcParams["hatch.linewidth"] = 1.6
     df, fams = _present_families(df, families, pool)
     variants = _ordered_variants(df["variant"].unique())
     edges = _shared_edges(df, col, conj_json, families, bins)
     ref = _initial_by_family(conj_json, families) if conj_json else {}
 
     ncol = len(fams)
-    fig, axes = plt.subplots(1, ncol, figsize=(4.6 * ncol, 4.0), sharey=True, squeeze=False)
+    # Size for a portrait US-Letter (8.5x11") text column: hold the TOTAL width to ~fig_w so a
+    # 4-across row fits the page, making each panel thinner as ncol grows. Kept a touch taller so
+    # the thin panels aren't cramped, with fonts big enough to stay readable at print size.
+    fig_w = min(7.5, 1.9 * ncol + 0.6)     # ~7.5" for 4 panels; narrower for fewer
+    fig_h = 3.6
+    fs = 9.5 if ncol >= 4 else 10.5         # base font size for this compact layout
+    fig, axes = plt.subplots(1, ncol, figsize=(fig_w, fig_h), sharey=True, squeeze=False)
     axes = axes[0]
     for c, fam in enumerate(fams):
         ax = axes[c]
@@ -393,18 +399,20 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
         ax.axvspan(4.0, 7.0, color="green", alpha=0.07)
         if c == 0:
             ax.text(5.5, 0.97, "Ideal zone\nat TCA", transform=ax.get_xaxis_transform(),
-                    ha="center", va="top", fontsize=8, color="#0b4d0b",
+                    ha="center", va="top", fontsize=fs - 1.5, color="#0b4d0b",
                     style="italic", zorder=1)
-        ax.set_title(f"Initial Miss Distance: {fam:g} km" if isinstance(fam, float) else "All starts pooled",
-                     fontsize=11)
-        ax.set_xlabel(_col_label(col), fontsize=10)
+        ax.set_title(f"Initial miss: {fam:g} km" if isinstance(fam, float) else "All starts pooled",
+                     fontsize=fs)
+        ax.set_xlabel(_col_label(col), fontsize=fs)
         if c == 0:
-            ax.set_ylabel("Density" if density else "Rollouts", fontsize=10)
-        ax.legend(fontsize=7, loc="upper right")
+            ax.set_ylabel("Density" if density else "Rollouts", fontsize=fs)
+        ax.tick_params(labelsize=fs - 1.5)
+        ax.legend(fontsize=fs - 2.0, loc="upper right", handlelength=1.4,
+                  borderpad=0.4, labelspacing=0.3)
 
     fig.suptitle(f"Final {_col_label(col)} by variant{' (pooled)' if pool else ''}",
-                 fontsize=12)
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
+                 fontsize=fs + 1.5)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
     _save(fig, tag, "miss_shift_overlay_pooled" if pool else "miss_shift_overlay")
 
 
