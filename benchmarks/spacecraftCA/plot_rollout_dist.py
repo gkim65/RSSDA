@@ -120,7 +120,7 @@ _VARIANT_COLORS = {"centralized": "#1f77b4", "sdec": "#2ca02c", "dec": "#d62728"
 _VARIANT_STYLE = {
     "dec":         dict(ls="-",  lw=1.9, zorder=2, hatch=None),
     "sdec":        dict(ls="-",  lw=2.4, zorder=3, hatch="///"),
-    "centralized": dict(ls="--", lw=1.4, zorder=4, hatch="\\\\\\"),
+    "centralized": dict(ls="--", lw=1.8, zorder=4, hatch="\\\\\\"),
 }
 # draw dec, then sdec, then centralized-dashed-on-top (regardless of alphabetical order).
 _DRAW_ORDER = ["dec", "sdec", "centralized"]
@@ -264,7 +264,10 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
     over SDec where the two coincide. The initial miss is a dashed vertical line per family.
     With pool=True the four families collapse to a single panel; density=True normalizes each
     variant to unit area; alpha controls fill transparency."""
+    import matplotlib as mpl
     import matplotlib.pyplot as plt
+    # thicker hatch lines (default is 1.0) so the /// and \\\ textures read boldly.
+    mpl.rcParams["hatch.linewidth"] = 2.0
     df, fams = _present_families(df, families, pool)
     variants = _ordered_variants(df["variant"].unique())
     edges = _shared_edges(df, col, conj_json, families, bins)
@@ -282,17 +285,21 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
             style = _VARIANT_STYLE.get(v, dict(ls="-", lw=1.6, zorder=2))
             color = _VARIANT_COLORS.get(v, "0.2")
             vals = sub[col].to_numpy()
-            # filled body: semi-transparent so overlaps blend into a combined color. sdec and
-            # centralized carry opposite-direction hatches (colored to match the variant) so the
-            # two textures cross where the distributions coincide.
+            # dec is a plain solid color fill (no hatch) so its right-shifted overshoot reads as
+            # a solid block; sdec and centralized are WHITE fills with a per-variant COLORED
+            # hatch (opposite directions) so where the two coincide the crossing hatch lines stay
+            # legible instead of blending into muddy color.
+            hatch = style.get("hatch")
+            facecolor = color if hatch is None else "white"
             ax.hist(vals, bins=edges, histtype="stepfilled", density=density,
-                    facecolor=color, alpha=alpha, edgecolor=color, hatch=style.get("hatch"),
+                    facecolor=facecolor, alpha=alpha, edgecolor=color, hatch=hatch,
                     linewidth=0.0, zorder=style["zorder"], label=f"{v} (n={len(sub)})")
-            # outline on the outer edge so each variant's shape stays readable through the
-            # blended fills. Centralized uses a dashed outline drawn on top; others solid black.
-            edgecolor = color if v == "centralized" else "black"
+            # crisp outer outline so each shape stays readable through the crossing hatches.
+            # Everything is black; centralized uses its own (blue) DASHED outline drawn on top so
+            # it's distinguishable where it traces over sdec.
+            outline_color = color if v == "centralized" else "black"
             ax.hist(vals, bins=edges, histtype="step", density=density,
-                    edgecolor=edgecolor, linewidth=style["lw"], linestyle=style["ls"],
+                    edgecolor=outline_color, linewidth=style["lw"], linestyle=style["ls"],
                     zorder=style["zorder"] + 3)
         # initial reference line(s)
         if isinstance(fam, float):
