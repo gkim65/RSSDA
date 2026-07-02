@@ -318,13 +318,29 @@ def _burn_rates_for_row(burn_group, contacts_str, n_stages):
               f"(burn keys: {sorted(burn_group)})")
         return zero, zero
 
+    return _pad_rates(match, n_stages, f"contacts={sorted(want)}")
+
+
+def _pad_rates(entry, n_stages, tag):
+    """Pad a burn-map entry's sc1_rate/sc2_rate to length n_stages (0-fill)."""
+    zero = [0.0] * n_stages
+
     def pad(rates):
         r = [float(x) for x in (rates or [])]
         return (r + zero)[:n_stages]
-    s1, s2 = pad(match.get("sc1_rate")), pad(match.get("sc2_rate"))
+    s1, s2 = pad(entry.get("sc1_rate")), pad(entry.get("sc2_rate"))
     nz = [i for i in range(n_stages) if s1[i] > 0 or s2[i] > 0]
-    print(f"[burns]   matched contacts={sorted(want)} -> burn stages {nz}")
+    print(f"[burns]   matched {tag} -> burn stages {nz}")
     return s1, s2
+
+
+def _burn_rates_by_key(burn_group, key, n_stages):
+    """Fetch burn rates for a rail cell keyed directly (e.g. '__dec__')."""
+    zero = [0.0] * n_stages
+    entry = (burn_group or {}).get(key)
+    if not entry:
+        return zero, zero
+    return _pad_rates(entry, n_stages, key)
 
 
 def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group,
@@ -332,19 +348,24 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
     """Build one peel heatmap figure for a single conjunction."""
     n_rows = len(sdec_rows)
 
-    # Returns for scaling the bar panel.
-    sdec_ret = [_fnum(r.get("expected_return"), 0.0) for r in sdec_rows]
+    # Bar panel shows DELTA return from the Centralized rail: 0 = matches the
+    # rail, negative = degradation as contacts are peeled away. Anchors the story.
     cen_ret = _fnum(cen_row.get("expected_return")) if cen_row else None
     dec_ret = _fnum(dec_row.get("expected_return")) if dec_row else None
-    all_ret = [x for x in (sdec_ret + [cen_ret, dec_ret]) if x is not None]
-    rmin, rmax = min(all_ret), max(all_ret)
-    span = (rmax - rmin) or 1.0
-    pad = 0.10 * span
-    xlo, xhi = rmin - pad, rmax + 0.06 * span  # tight: value labels sit outside the panel
+    base = cen_ret if cen_ret is not None else 0.0
+    sdec_d = [_fnum(r.get("expected_return"), base) - base for r in sdec_rows]
+    dec_d = (dec_ret - base) if dec_ret is not None else None
+    all_d = [x for x in (sdec_d + [0.0, dec_d]) if x is not None]
+    dmin, dmax = min(all_d), max(all_d)
+    span = (dmax - dmin) or 1.0
+    # x-range: left headroom for the value labels (they sit at each bar tip),
+    # right up to 0 (the rail) plus a hair.
+    xlo, xhi = dmin - 0.28 * span, min(0.0, dmax) + 0.02 * span
 
-    # An extra row at the TOP shows the full original GS-contact grid ("all
-    # syncs") so the peel story reads against the set it started from.
-    n_grid = n_rows + 1
+    # Extra rows bracket the peel: TOP = full GS-contact grid ("all syncs", the
+    # set the peel started from); BOTTOM = Dec (no syncs), the risk floor.
+    has_dec_row = dec_row is not None
+    n_grid = n_rows + 1 + (1 if has_dec_row else 0)
 
     # Figure size: fit an 8.5x11 page. Rows are short so the figure stays compact.
     fig_h = min(5.0, 1.3 + 0.24 * n_grid)
@@ -363,10 +384,11 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
             sp.set_color(ink)
         ax.tick_params(colors=ink, labelcolor=ink)
 
-    # y ordering: top-of-grid is the "all GS contacts" reference row, then the
-    # first greedy sdec row, reading top-to-bottom.
+    # y ordering, top -> bottom: GS-contacts reference row, sdec search rows,
+    # then (if present) the Dec no-sync row at the very bottom (y = 0).
     y_top = n_grid - 1                       # reference (all GS contacts) row
     y_of = lambda i: (n_grid - 2 - i)        # sdec search rows below it
+    y_dec = 0 if has_dec_row else None       # Dec no-sync row at the floor
 
     # -------- heatmap panel --------
     # Reference "all GS contacts" row = the TRUE per-conjunction GS-contact
@@ -418,6 +440,10 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
         contacts_str = r.get("contacts", "")
         s1, s2 = _burn_rates_for_row(burn_group, contacts_str, n_stages)
         _draw_row(y_of(i), set(_parse_contacts(contacts_str, n_stages)), s1, s2)
+    # Dec row (bottom): empty sync grid (never syncs) + its own burn hatches.
+    if has_dec_row:
+        d1, d2 = _burn_rates_by_key(burn_group, "__dec__", n_stages)
+        _draw_row(y_dec, set(), d1, d2)
 
     ax_hm.set_xlim(-0.5, n_stages - 0.5)
     ax_hm.set_ylim(-0.6, n_grid - 0.4)
@@ -426,6 +452,9 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
     yticks = [y_top] + [y_of(i) for i in range(n_rows)]
     ylabels = [f"GS contacts (all)  ($n_c$={len(contact_stages_model)})"] + \
         [f"{_subset_label(r.get('subset_name'))}  ($n_c$={_syncs(r)})" for r in sdec_rows]
+    if has_dec_row:
+        yticks.append(y_dec)
+        ylabels.append("Dec (no syncs)  ($n_c$=0)")
     ax_hm.set_yticks(yticks)
     ax_hm.set_yticklabels(ylabels, fontsize=9)
     ax_hm.set_xlabel("Stage index (T$-$24\\,h $\\rightarrow$ TCA)"
@@ -433,28 +462,33 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
                      "Stage index (T-24h to TCA)")
     ax_hm.set_title("Kept sync contacts", fontsize=11, color=ink, pad=6)
 
-    # -------- bar panel (expected return) --------
-    # No bar on the top reference row (it has no return of its own).
-    for i, r in enumerate(sdec_rows):
-        y = y_of(i)
-        ret = sdec_ret[i]
-        ax_bar.barh(y, ret - xlo, left=xlo, height=cell_h,
-                    color=colors["bar"], edgecolor=colors["cell_edge"],
+    # -------- bar panel (delta return from Centralized) --------
+    # Bars run from 0 (the rail) leftward to each row's negative delta. No bar on
+    # the top reference row (it has no return of its own).
+    def _bar(y, d, color):
+        ax_bar.barh(y, d, left=0.0, height=cell_h,
+                    color=color, edgecolor=colors["cell_edge"],
                     linewidth=0.5, alpha=0.9)
-        # Value label just outside the (now thin) panel's right edge.
-        ax_bar.text(xhi + 0.04 * span, y, f"{ret:.2f}", clip_on=False,
-                    va="center", ha="left", fontsize=8, color=ink)
+        # Value label just past each bar's tip (to its left), inside the panel.
+        ax_bar.text(d - 0.02 * span, y, f"{d:+.2f}", clip_on=False,
+                    va="center", ha="right", fontsize=8, color=ink)
 
-    # Centralized rail (dashed) and Dec rail (dotted) as references.
-    if cen_ret is not None:
-        ax_bar.axvline(cen_ret, color=colors["cen"], ls="--", lw=1.6,
-                       label=f"Centralized rail ({cen_ret:.2f})")
-    if dec_ret is not None and (cen_ret is None or abs(dec_ret - cen_ret) > 1e-9):
-        ax_bar.axvline(dec_ret, color=colors["dec"], ls=":", lw=1.6,
-                       label=f"Dec rail ({dec_ret:.2f})")
+    for i in range(n_rows):
+        _bar(y_of(i), sdec_d[i], colors["bar"])
+    if has_dec_row and dec_d is not None:
+        _bar(y_dec, dec_d, colors["dec"])   # Dec bar in the Dec color = the risk floor
+
+    # Centralized rail = 0 (solid). Dec rail dotted so sdec bars read against it.
+    ax_bar.axvline(0.0, color=colors["cen"], ls="--", lw=1.6,
+                   label="Centralized rail ($\\Delta$=0)")
+    if dec_d is not None and abs(dec_d) > 1e-9:
+        ax_bar.axvline(dec_d, color=colors["dec"], ls=":", lw=1.4,
+                       label=f"Dec rail ({dec_d:+.2f})")
 
     ax_bar.set_xlim(xlo, xhi)
-    ax_bar.set_xlabel("Expected return")
+    ax_bar.set_xlabel("$\\Delta$ return from centralized"
+                      if plt.rcParams.get("text.usetex") else
+                      "Delta return from centralized")
     # The panel is intentionally thin: only two x-ticks (the two rails) so the
     # tick labels never collide.
     from matplotlib.ticker import MaxNLocator
