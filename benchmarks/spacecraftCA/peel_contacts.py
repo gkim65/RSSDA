@@ -370,7 +370,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--conj-file", required=True)
-    ap.add_argument("--init-miss", default="0.5")
+    ap.add_argument("--init-miss", default="0.5",
+                    help="belief center(s): comma list of km, OR 'true' to center each "
+                         "conjunction's belief on its own true miss (conj.miss_km).")
     ap.add_argument("--init-spread", default="1.4")
     ap.add_argument("--rollouts", type=int, default=200)
     ap.add_argument("--backend", default="numerical", choices=["numerical", "keplerian", "drag"])
@@ -430,9 +432,20 @@ def main():
     ).items() if v is not None}
 
     conjs = SD.conjunctions_from_file(args.conj_file)
-    beliefs = [(float(im), float(sp))
-               for im in (float(x) for x in args.init_miss.split(","))
-               for sp in (float(x) for x in args.init_spread.split(","))]
+    # --init-miss "true" (sentinel, mirrors sweep_driver): seed each conjunction's belief center
+    # at ITS OWN true miss (conj.miss_km) rather than a fixed global list. Spread is unchanged.
+    true_belief = args.init_miss.strip().lower() == "true"
+    spreads = [float(x) for x in args.init_spread.split(",") if x.strip()]
+    beliefs = ([] if true_belief
+               else [(float(im), sp)
+                     for im in (float(x) for x in args.init_miss.split(",") if x.strip())
+                     for sp in spreads])
+
+    def _beliefs_for(conj):
+        """Per-conjunction belief list. Numeric --init-miss => the global list (same for every
+        conjunction). --init-miss true => center on this conjunction's own true miss, one belief
+        per spread (uncertainty from --init-spread, unchanged)."""
+        return [(conj.miss_km, sp) for sp in spreads] if true_belief else beliefs
     place_counts = [int(x) for x in args.place_counts.split(",") if x.strip()]
     csv_path = os.path.join(args.out_dir, f"peel_{args.tag}.csv")
     done, rows = _load_done(csv_path)
@@ -446,8 +459,10 @@ def main():
         os.makedirs(save_dir, exist_ok=True)
         print(f"    saving full per-rollout arrays -> {save_dir}/ (one .npz per subset cell)")
 
-    print(f"peel_contacts[{args.mode}]: {len(conjs)} conj x {len(beliefs)} belief, "
-          f"backend={args.backend}{' +wandb' if wb else ''} -> {csv_path}")
+    n_belief = len(spreads) if true_belief else len(beliefs)
+    print(f"peel_contacts[{args.mode}]: {len(conjs)} conj x {n_belief} belief, "
+          f"backend={args.backend}{' +wandb' if wb else ''}"
+          f"{', init_miss=TRUE (per-conj true miss)' if true_belief else ''} -> {csv_path}")
     # --coarse: peel reads available contacts itself (CG.conjunction_contacts), so it MUST use the
     # SAME coarse grid the worker's solve will use (SD._COARSE_GRID, auto-populated from --coarse in
     # argv) — else peel would pick fine-grid contacts the 6-stage worker doesn't have (hard-error).
@@ -457,7 +472,7 @@ def main():
         avail = sorted(int(a) for a in avail)
         if args.mode == "adaptive":
             print(f"\n[{conj.name}] avail({len(avail)})={avail}  tol={args.tol}")
-            run_conjunction_adaptive(conj, beliefs, avail, args.backend, args.rollouts,
+            run_conjunction_adaptive(conj, _beliefs_for(conj), avail, args.backend, args.rollouts,
                                      csv_path, rows, b1_opts, args.tol, wb=wb, save_dir=save_dir)
         else:
             # grid mode: static halving + early/late placement. near_burn (place_nearburn_c*) is
@@ -466,7 +481,7 @@ def main():
             if not args.no_rails:
                 subsets = {"__centralized__": avail, "__dec__": [], **subsets}
             print(f"\n[{conj.name}] avail({len(avail)})={avail} subsets={list(subsets)}")
-            run_conjunction(conj, beliefs, subsets, args.backend, args.rollouts,
+            run_conjunction(conj, _beliefs_for(conj), subsets, args.backend, args.rollouts,
                             csv_path, done, rows, b1_opts, wb=wb, save_dir=save_dir)
     print(f"\ndone -> {csv_path} ({len(rows)} rows)")
 
