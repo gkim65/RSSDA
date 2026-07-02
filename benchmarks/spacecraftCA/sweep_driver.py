@@ -400,7 +400,8 @@ def main():
     ap.add_argument("--angles", default="0", help="comma list of geometry angles (deg)")
     ap.add_argument("--v-rel", default=None, help="comma list of along-track v_rel (m/s)")
     ap.add_argument("--init-miss", default="0.5,3,4,5,8",
-                    help="comma list of belief DANGER centers (km)")
+                    help="comma list of belief DANGER centers (km); or 'true' to center each "
+                         "conjunction's belief on its own true miss (spread still from --init-spread)")
     ap.add_argument("--init-spread", default="1.4,3.0",
                     help="comma list of belief UNCERTAINTY half-widths (km)")
     ap.add_argument("--variants", default="centralized,sdec,dec",
@@ -476,7 +477,14 @@ def main():
             print(" ", repr(c))
         return
 
-    init_misses = [float(x) for x in args.init_miss.split(",") if x.strip()]
+    # --init-miss "true" (sentinel) => seed each conjunction's belief DANGER center at ITS OWN
+    # true miss (conj.miss_km) rather than a fixed global list. The belief UNCERTAINTY (sigma /
+    # half-width) still comes entirely from --init-spread, unchanged; only the center moves.
+    # Otherwise it's a numeric list of global belief centers applied identically to every
+    # conjunction (legacy behavior, bit-for-bit).
+    true_belief = args.init_miss.strip().lower() == "true"
+    init_misses = ([] if true_belief
+                   else [float(x) for x in args.init_miss.split(",") if x.strip()])
     spreads = [float(x) for x in args.init_spread.split(",") if x.strip()]
     variants = [v.strip() for v in args.variants.split(",") if v.strip()]
     variants += [f"b1:{b.strip()}" for b in args.baselines.split(",") if b.strip()]
@@ -488,9 +496,20 @@ def main():
                tag=args.tag) if args.wandb else None)
     done, rows = load_done_keys(csv_path)
     beliefs = [(im, sp) for im in init_misses for sp in spreads]
-    print(f"=== sweep_driver: {len(conjs)} conjunctions x {len(beliefs)} beliefs x "
+
+    def _beliefs_for(conj):
+        """Belief (init_miss, init_spread) list for ONE conjunction. Numeric --init-miss => the
+        global list (identical per conjunction). --init-miss true => center on this conjunction's
+        own true miss, one belief per spread. Spread (uncertainty) is unchanged either way."""
+        if true_belief:
+            return [(conj.miss_km, sp) for sp in spreads]
+        return beliefs
+
+    n_beliefs = len(spreads) if true_belief else len(beliefs)
+    print(f"=== sweep_driver: {len(conjs)} conjunctions x {n_beliefs} beliefs x "
           f"{len(variants)} variants  (backend={args.backend}, rollouts={args.rollouts}, "
-          f"jobs={args.jobs})")
+          f"jobs={args.jobs}"
+          f"{', init_miss=TRUE (per-conj true miss)' if true_belief else ''})")
     print(f"    output: {csv_path}  ({len(done)} cells already done -> skipped)")
 
     # --- partition conjunctions: feasible-with-work vs infeasible (recorded, never crash) ---
@@ -503,7 +522,7 @@ def main():
             print(f"  SKIP infeasible {lbl} (miss={conj.miss_km} angle={conj.angle_deg}): "
                   f"{conj.reason}")
             if args.keep_infeasible:
-                for (im, sp) in beliefs:
+                for (im, sp) in _beliefs_for(conj):
                     for var in variants:
                         k = cell_key(lbl, conj.miss_km, conj.angle_deg, conj.v_rel_ms, im, sp, var)
                         if k in done:
@@ -517,11 +536,12 @@ def main():
                 write_rows(csv_path, rows)
             continue
         # which of THIS conjunction's cells are already done (passed to the child to skip)
+        conj_beliefs = _beliefs_for(conj)
         conj_done = {cell_key(lbl, conj.miss_km, conj.angle_deg, conj.v_rel_ms, im, sp, var)
-                     for (im, sp) in beliefs for var in variants
+                     for (im, sp) in conj_beliefs for var in variants
                      if cell_key(lbl, conj.miss_km, conj.angle_deg, conj.v_rel_ms, im, sp, var)
                      in done}
-        n_total = len(beliefs) * len(variants)
+        n_total = len(conj_beliefs) * len(variants)
         if len(conj_done) >= n_total:
             n_skip_done += n_total
             continue
@@ -553,13 +573,15 @@ def main():
     def _launch(conj, conj_done):
         shard_path = os.path.join(shard_dir, f"{(conj.name or conj.label)}_"
                                   f"m{conj.miss_km}_a{int(conj.angle_deg)}.csv")
+        conj_beliefs = _beliefs_for(conj)
         proc, workdir, label = spawn_conjunction(
-            conj, beliefs, variants, args.baselines.split(",") if args.baselines else [],
+            conj, conj_beliefs, variants, args.baselines.split(",") if args.baselines else [],
             args.backend, args.rollouts, b1_opts, args.n_contacts, conj_done, shard_path,
             rollout_dir=rollout_dir, solve_obs=solve_obs)
         running[proc] = (workdir, label, shard_path)
         print(f"  LAUNCH {label:<11} miss={conj.miss_km} a={conj.angle_deg:.0f} "
-              f"({len(beliefs)*len(variants)-len(conj_done)} cells) [pid {proc.pid}]", flush=True)
+              f"({len(conj_beliefs)*len(variants)-len(conj_done)} cells) [pid {proc.pid}]",
+              flush=True)
 
     try:
         while queue or running:
