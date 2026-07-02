@@ -385,9 +385,11 @@ def main():
     ap.add_argument("--mode", default="adaptive", choices=["adaptive", "grid"],
                     help="adaptive=burn-centered window + greedy peel-down (default); "
                          "grid=static halving/placement subsets")
-    ap.add_argument("--tol", type=float, default=5.0,
+    ap.add_argument("--tol", type=float, default=0.001,
                     help="adaptive: a subset PASSES if its expected_return is within this many "
-                         "units BELOW the Centralized rail (smaller = stricter, keeps more contacts)")
+                         "units BELOW the Centralized rail (smaller = stricter, keeps more contacts). "
+                         "Default 0.001 = 'must match Centralized exactly' (tiny slack absorbs "
+                         "floating-point noise; a larger tol lets the peel over-shrink toward Dec).")
     ap.add_argument("--tag", default="peel")
     ap.add_argument("--out-dir", default=os.path.join(_HERE, "notes", "results"))
     # --- RS-SDA* solve limits (CLUSTER SAFETY VALVE; mirror sweep_driver). Hitting the memory
