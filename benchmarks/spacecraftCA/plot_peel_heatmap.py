@@ -89,6 +89,7 @@ def _theme_colors(theme):
             "cen": "#ff6b6b",        # centralized rail
             "dec": "#c8a2ff",        # dec rail
             "band": "#ff6b6b",
+            "burn": "#ff3b3b",       # maneuver-stage hatch (reads on dark)
         }
     return {
         "ink": "#1a1a1a",
@@ -99,6 +100,7 @@ def _theme_colors(theme):
         "cen": "#d62728",
         "dec": "#7d3fb5",
         "band": "#d62728",
+        "burn": "#d10000",           # maneuver-stage hatch (reads on light)
     }
 
 
@@ -271,8 +273,57 @@ def _gs_contacts_from_orbits(conj_file):
     return out
 
 
-def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, tol,
-                 colors, theme, title):
+def _load_burn_map(path):
+    """Load the burn-stage map written by inspect_burn_stages.py.
+
+    Shape: { label: { subset_key: {sc1_rate:[...], sc2_rate:[...], n_stages:N, ...} } }.
+    Returns {} (no overlay) if the path is missing/unreadable so the figure still
+    renders without it."""
+    if not path or not os.path.exists(path):
+        return {}
+    try:
+        import json
+        with open(path) as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[burns] could not read {path}: {e}; skipping the maneuver overlay")
+        return {}
+
+
+def _burn_rates_for_row(burn_group, contacts_str, n_stages):
+    """Match a figure row (by its kept-contact set) to a burn-map subset entry and
+    return (sc1_rate, sc2_rate) as length-n_stages float lists (0 if no match).
+
+    The inspector keys subsets by their contact tag ("c15-16-17-..."); we normalize
+    both the tag and the row's `contacts` cell to a frozenset of stage ints so the
+    match is order/format independent."""
+    zero = [0.0] * n_stages
+    if not burn_group:
+        return zero, zero
+    want = frozenset(_parse_contacts(contacts_str, n_stages))
+
+    def key_to_set(k):
+        # "c15-16-17" -> {15,16,17}; rails/other keys -> empty (won't match sdec rows)
+        if not k.startswith("c"):
+            return frozenset()
+        return frozenset(int(t) for t in k[1:].split("-") if t.strip().isdigit())
+
+    match = None
+    for k, v in burn_group.items():
+        if key_to_set(k) == want:
+            match = v
+            break
+    if match is None:
+        return zero, zero
+
+    def pad(rates):
+        r = [float(x) for x in (rates or [])]
+        return (r + zero)[:n_stages]
+    return pad(match.get("sc1_rate")), pad(match.get("sc2_rate"))
+
+
+def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group,
+                 tol, colors, theme, title):
     """Build one peel heatmap figure for a single conjunction."""
     n_rows = len(sdec_rows)
 
@@ -327,7 +378,12 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, tol,
 
     cell_h = 0.78  # cells nearly fill each unit row -> compact, no fat gaps
 
-    def _draw_row(y, kept):
+    def _rate_alpha(rate):
+        # Any nonzero burn shows; alpha scales with frequency (floor so rare burns
+        # are still visible, ceil so 100% isn't pure-solid over the base cell).
+        return 0.0 if rate <= 0 else 0.30 + 0.60 * min(1.0, rate)
+
+    def _draw_row(y, kept, sc1_rate=None, sc2_rate=None):
         for st in range(n_stages):
             on = st in kept
             face = colors["cell"] if on else "none"
@@ -335,11 +391,23 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, tol,
             ax_hm.add_patch(Rectangle((st - 0.5, y - cell_h / 2), 1.0, cell_h,
                                       facecolor=face, edgecolor=edge,
                                       linewidth=0.6, alpha=0.95 if on else 0.45))
+            # Maneuver overlay: SC1 -> "///", SC2 -> "\\\\" hatch, alpha ~ burn rate.
+            for rates, hatch in ((sc1_rate, "////"), (sc2_rate, "\\\\\\\\")):
+                if not rates:
+                    continue
+                a = _rate_alpha(rates[st])
+                if a <= 0:
+                    continue
+                ax_hm.add_patch(Rectangle((st - 0.5, y - cell_h / 2), 1.0, cell_h,
+                                          facecolor="none", edgecolor=colors["burn"],
+                                          hatch=hatch, linewidth=0.0, alpha=a))
 
-    # Reference row: all original GS contacts.
+    # Reference row: all original GS contacts (no policy => no burns).
     _draw_row(y_top, contact_stages_model)
     for i, r in enumerate(sdec_rows):
-        _draw_row(y_of(i), set(_parse_contacts(r.get("contacts", ""), n_stages)))
+        contacts_str = r.get("contacts", "")
+        s1, s2 = _burn_rates_for_row(burn_group, contacts_str, n_stages)
+        _draw_row(y_of(i), set(_parse_contacts(contacts_str, n_stages)), s1, s2)
 
     ax_hm.set_xlim(-0.5, n_stages - 0.5)
     ax_hm.set_ylim(-0.6, n_grid - 0.4)
@@ -388,13 +456,18 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, tol,
     # Legend placed ABOVE the panels so it never overlaps the data.
     handles = [Patch(facecolor=colors["cell"], edgecolor=colors["cell_edge"],
                      label="Sync contact")]
+    if burn_group:  # only advertise the overlay when burn data was supplied
+        handles.append(Patch(facecolor="none", edgecolor=colors["burn"],
+                             hatch="////", label="SC1 maneuver"))
+        handles.append(Patch(facecolor="none", edgecolor=colors["burn"],
+                             hatch="\\\\\\\\", label="SC2 maneuver"))
     if cen_ret is not None:
         handles.append(plt.Line2D([0], [0], color=colors["cen"], ls="--",
                                   label="Centralized rail"))
     if dec_ret is not None:
         handles.append(plt.Line2D([0], [0], color=colors["dec"], ls=":",
                                   label="Dec rail"))
-    leg = fig.legend(handles=handles, loc="upper center", ncol=len(handles),
+    leg = fig.legend(handles=handles, loc="upper center", ncol=min(len(handles), 5),
                      bbox_to_anchor=(0.57, 0.99), frameon=False, fontsize=9)
     for t in leg.get_texts():
         t.set_color(ink)
@@ -447,6 +520,10 @@ def main():
                     help="Conjunction orbit specs; the top 'GS contacts (all)' row + the stage "
                          "grid are recomputed per conjunction from these orbits (authoritative). "
                          "Falls back to the peeled-contact union if brahe can't be imported.")
+    ap.add_argument("--burn-json", default=None,
+                    help="Burn-stage map from inspect_burn_stages.py. When given, each row gets a "
+                         "hashed-red maneuver overlay (SC1 '///', SC2 '\\\\\\\\'; alpha ~ burn "
+                         "frequency). Omit for no overlay.")
     args = ap.parse_args()
 
     # Resolve paths relative to this script's directory when not absolute,
@@ -455,6 +532,10 @@ def main():
     out_dir = args.out_dir if os.path.isabs(args.out_dir) else os.path.join(_HERE, args.out_dir)
     conj_file = args.conj_file if os.path.isabs(args.conj_file) \
         else os.path.join(_HERE, args.conj_file)
+    burn_json = None
+    if args.burn_json:
+        burn_json = args.burn_json if os.path.isabs(args.burn_json) \
+            else os.path.join(_HERE, args.burn_json)
 
     _setup_typography()
     colors = _theme_colors(args.theme)
@@ -470,6 +551,12 @@ def main():
         rows = _read_rows(csv_path)
         if not rows:
             raise SystemExit(f"No rows in {csv_path}")
+    # Per-stage maneuver overlay (optional): { label: { subset_key: {sc1_rate,...} } }.
+    burn_map = _load_burn_map(burn_json)
+    if burn_json:
+        print(f"[burns] overlay from {burn_json}: {len(burn_map)} label(s)"
+              if burn_map else f"[burns] no usable data in {burn_json}; overlay off")
+
     # Authoritative per-conjunction GS-contact grid, recomputed from the orbits.
     gs_by_label = _gs_contacts_from_orbits(conj_file) if os.path.exists(conj_file) else {}
     if not gs_by_label:
@@ -516,8 +603,9 @@ def main():
         pretty = label.replace("_", " ")
         pretty = pretty[:1].upper() + pretty[1:] if pretty else "Conjunction"
         title = f"Greedy contact peel-down: {pretty}" if label else "Greedy contact peel-down"
+        burn_group = burn_map.get(label, {})
         fig = _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all,
-                           args.tol, colors, args.theme, title)
+                           burn_group, args.tol, colors, args.theme, title)
 
         base = f"peel_heatmap_{args.tag}"
         if len(labels) > 1 and label:
