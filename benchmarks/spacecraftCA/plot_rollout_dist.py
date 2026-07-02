@@ -364,6 +364,20 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
     fig_w = 4.0 * ncol + 0.6
     fig_h = 5.0                # taller: extra headroom above the bars for the legend
     fs = 20.0
+
+    # Dynamic y-ceiling (counts): tallest bar across ALL panels/variants + 400 headroom, so the
+    # legend clears the bars without hardcoding to one sweep's rollout count. (density keeps auto.)
+    y_top = None
+    if not density:
+        peak = 0
+        for fam in fams:
+            for v in variants:
+                vals = df[(df["variant"] == v) & (df["_fam"] == fam)][col].to_numpy()
+                vals = vals[np.isfinite(vals)]
+                if len(vals):
+                    peak = max(peak, int(np.histogram(vals, bins=edges)[0].max()))
+        y_top = peak + 400
+
     fig, axes = plt.subplots(1, ncol, figsize=(fig_w, fig_h), sharey=True, squeeze=False)
     axes = axes[0]
     for c, fam in enumerate(fams):
@@ -427,10 +441,10 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
         if c == 0:
             ax.set_ylabel("Density" if density else "Rollouts", fontsize=fs)
         ax.tick_params(labelsize=fs - 1.5)
-        # raise the y-ceiling to ~1000 (counts) so the legend clears the tallest bars -- same
+        # raise the y-ceiling to (tallest bar + 400) so the legend clears the bars -- same
         # y-scaling, just extra empty headroom at the top. (density mode keeps its auto range.)
-        if not density:
-            ax.set_ylim(top=1000)
+        if y_top is not None:
+            ax.set_ylim(top=y_top)
         # legend only on the FIRST panel; the "Ideal zone" label lives on the 2nd panel so the
         # two don't compete.
         if c == 0:
