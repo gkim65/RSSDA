@@ -314,12 +314,17 @@ def _burn_rates_for_row(burn_group, contacts_str, n_stages):
             match = v
             break
     if match is None:
+        print(f"[burns]   no match for contacts={sorted(want)} "
+              f"(burn keys: {sorted(burn_group)})")
         return zero, zero
 
     def pad(rates):
         r = [float(x) for x in (rates or [])]
         return (r + zero)[:n_stages]
-    return pad(match.get("sc1_rate")), pad(match.get("sc2_rate"))
+    s1, s2 = pad(match.get("sc1_rate")), pad(match.get("sc2_rate"))
+    nz = [i for i in range(n_stages) if s1[i] > 0 or s2[i] > 0]
+    print(f"[burns]   matched contacts={sorted(want)} -> burn stages {nz}")
+    return s1, s2
 
 
 def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group,
