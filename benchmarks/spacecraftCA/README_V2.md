@@ -222,6 +222,10 @@ $V $CA/compare_variants_v2.py --scenario-config conf/preset/verify.yaml --tag db
 
 ## Dependencies
 
-Pinned in the root `requirements.txt`: `hydra-core==1.3.2`, `omegaconf==2.3.0`,
-`wandb==0.18.7`, `pyyaml==6.0.2` (this is a `uv` venv — use
-`VIRTUAL_ENV=$PWD/.venv uv pip install ...`, not `python -m pip`).
+Declared in the root `pyproject.toml` and locked in `uv.lock`. From a fresh clone,
+`uv sync` creates `.venv` (Python 3.12) and installs everything — including
+`hydra-core==1.3.2`, `omegaconf==2.3.0`, `wandb==0.28.0`, `pyyaml==6.0.2`.
+`requirements.txt` is a generated export (`uv export`) for pip-only users.
+
+This is a `uv` venv — to add/change a dep, edit `pyproject.toml` then `uv sync`
+(or `VIRTUAL_ENV=$PWD/.venv uv pip install ...`), not `python -m pip`.

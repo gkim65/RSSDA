@@ -11,4 +11,10 @@ dependencies = [
     "psutil>=5.0.0",
     "pandas>=1.0.0",
     "scipy>=1.17.1",
+    "matplotlib>=3.5.0",
+    # config-first surface for benchmarks/spacecraftCA (Hydra/wandb): cfg -> build_scenario -> solve
+    "hydra-core==1.3.2",
+    "omegaconf==2.3.0",
+    "wandb==0.28.0",
+    "pyyaml==6.0.2",
 ]
