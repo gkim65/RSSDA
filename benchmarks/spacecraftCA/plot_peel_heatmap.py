@@ -537,10 +537,16 @@ def main():
     out_dir = args.out_dir if os.path.isabs(args.out_dir) else os.path.join(_HERE, args.out_dir)
     conj_file = args.conj_file if os.path.isabs(args.conj_file) \
         else os.path.join(_HERE, args.conj_file)
+    # --burn-json is a file the USER generates (often at the repo root), so resolve
+    # it against the CWD first (normal CLI behavior); fall back to the script dir.
     burn_json = None
     if args.burn_json:
-        burn_json = args.burn_json if os.path.isabs(args.burn_json) \
-            else os.path.join(_HERE, args.burn_json)
+        if os.path.isabs(args.burn_json):
+            burn_json = args.burn_json
+        elif os.path.exists(args.burn_json):
+            burn_json = os.path.abspath(args.burn_json)
+        else:
+            burn_json = os.path.join(_HERE, args.burn_json)
 
     _setup_typography()
     colors = _theme_colors(args.theme)
