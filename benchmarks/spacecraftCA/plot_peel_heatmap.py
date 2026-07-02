@@ -163,18 +163,23 @@ def _parse_contacts(raw, n_stages):
 _SUBSET_LABELS = {
     "__centralized__": "Centralized (all syncs)",
     "__dec__": "Dec (no syncs)",
-    "window_nearburn_c3": "Window (near-burn)",
     "minimal": "Minimal",
 }
 
 
 def _subset_label(name):
+    """Pretty, sentence-case display label. Trailing "_c<k>" or a "greedy_drop<k>"
+    index render the dropped stage as a math subscript $C_{k}$."""
     if name in _SUBSET_LABELS:
         return _SUBSET_LABELS[name]
     n = (name or "").strip()
     if n.startswith("greedy_drop"):
-        idx = n[len("greedy_drop"):]
-        return f"Greedy drop {idx}" if idx else "Greedy drop"
+        idx = n[len("greedy_drop"):].strip("_")
+        return f"Greedy drop $C_{{{idx}}}$" if idx else "Greedy drop"
+    if n.startswith("window"):
+        # window_nearburn_c9 -> "Window (near-burn, $C_9$)"
+        idx = n.split("_c")[-1] if "_c" in n else ""
+        return f"Window (near-burn, $C_{{{idx}}}$)" if idx.isdigit() else "Window (near-burn)"
     if not n:
         return "(unnamed)"
     # generic: underscores -> spaces, sentence case
@@ -238,7 +243,36 @@ def _conj_key(row):
     return (row.get("label") or "").strip()
 
 
-def _make_figure(sdec_rows, cen_row, dec_row, n_stages, tol, colors, theme, title):
+def _gs_contacts_from_orbits(conj_file):
+    """Authoritative per-conjunction GS-contact grid, recomputed from the orbits.
+
+    Returns {label: (n_stages, set(contact_stages))} by running the SAME computation
+    the peel/solve pipeline uses (CG.conjunction_contacts on each conjunction's orbit
+    pair). This is the TRUE ground-station opportunity set -- unlike the union of
+    peeled contacts, it includes contacts the window pre-filter dropped before peeling.
+    Returns {} if brahe/the model can't be imported here (caller then falls back to
+    the data-union), so the script still runs on hosts without the propagator."""
+    try:
+        from brahe import initialize_eop
+        initialize_eop()
+        import sweep_driver as SD
+        import conjunction_generator as CG
+    except Exception as e:
+        print(f"[gs-contacts] orbit recompute unavailable ({e}); "
+              f"falling back to peeled-contact union")
+        return {}
+    out = {}
+    for c in SD.conjunctions_from_file(conj_file):
+        all_times, cs = CG.conjunction_contacts(c)
+        label = (c.name or c.label or "").strip()
+        out[label] = (len(all_times), set(int(s) for s in cs))
+        print(f"[gs-contacts] {label!r}: N_STAGES={len(all_times)} "
+              f"contacts({len(cs)})={sorted(int(s) for s in cs)}")
+    return out
+
+
+def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, tol,
+                 colors, theme, title):
     """Build one peel heatmap figure for a single conjunction."""
     n_rows = len(sdec_rows)
 
@@ -249,16 +283,20 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, tol, colors, theme, titl
     all_ret = [x for x in (sdec_ret + [cen_ret, dec_ret]) if x is not None]
     rmin, rmax = min(all_ret), max(all_ret)
     span = (rmax - rmin) or 1.0
-    pad = 0.12 * span
-    xlo, xhi = rmin - pad, rmax + 0.35 * span  # extra right room for value labels
+    pad = 0.10 * span
+    xlo, xhi = rmin - pad, rmax + 0.06 * span  # tight: value labels sit outside the panel
 
-    # Figure size: fit an 8.5x11 page. Height grows gently with row count.
-    fig_h = min(10.5, 2.4 + 0.62 * n_rows)
+    # An extra row at the TOP shows the full original GS-contact grid ("all
+    # syncs") so the peel story reads against the set it started from.
+    n_grid = n_rows + 1
+
+    # Figure size: fit an 8.5x11 page. Rows are short so the figure stays compact.
+    fig_h = min(5.0, 1.3 + 0.24 * n_grid)
     fig = plt.figure(figsize=(8.0, fig_h))
     fig.patch.set_alpha(0.0)
-    # Left = stage heatmap, right = return bars.
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.35, 1.0], wspace=0.06,
-                          left=0.24, right=0.90, top=0.86, bottom=0.14)
+    # Left = stage heatmap, right = a thin return-bar strip (~1/8 of the width).
+    gs = fig.add_gridspec(1, 2, width_ratios=[6.5, 0.9], wspace=0.04,
+                          left=0.24, right=0.88, top=0.80, bottom=0.17)
     ax_hm = fig.add_subplot(gs[0, 0])
     ax_bar = fig.add_subplot(gs[0, 1], sharey=ax_hm)
 
@@ -269,65 +307,68 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, tol, colors, theme, titl
             sp.set_color(ink)
         ax.tick_params(colors=ink, labelcolor=ink)
 
-    # y ordering: first greedy row at TOP -> reads top-to-bottom.
-    y_of = lambda i: (n_rows - 1 - i)
+    # y ordering: top-of-grid is the "all GS contacts" reference row, then the
+    # first greedy sdec row, reading top-to-bottom.
+    y_top = n_grid - 1                       # reference (all GS contacts) row
+    y_of = lambda i: (n_grid - 2 - i)        # sdec search rows below it
 
     # -------- heatmap panel --------
-    contact_stages_model = None
-    try:
-        import spacecraft_stage_grid as G  # noqa: F811
-        contact_stages_model = set(int(s) for s in G.CONTACT_STAGES)
-    except Exception:
-        pass
+    # Reference "all GS contacts" row = the TRUE per-conjunction GS-contact
+    # opportunity set, recomputed from the orbits (passed in as contacts_all).
+    # Fall back to the union of peeled contacts if the orbit recompute wasn't
+    # available -- the greedy peel only removes contacts, so that union is the
+    # set the search STARTED from (a subset of the true opportunities).
+    if contacts_all:
+        contact_stages_model = set(int(s) for s in contacts_all)
+    else:
+        contact_stages_model = set()
+        for r in sdec_rows:
+            contact_stages_model |= set(_parse_contacts(r.get("contacts", ""), n_stages))
 
-    for i, r in enumerate(sdec_rows):
-        y = y_of(i)
-        kept = set(_parse_contacts(r.get("contacts", ""), n_stages))
+    cell_h = 0.78  # cells nearly fill each unit row -> compact, no fat gaps
+
+    def _draw_row(y, kept):
         for st in range(n_stages):
-            face = colors["cell"] if st in kept else "none"
-            edge = colors["cell_edge"] if st in kept else colors["grid"]
-            ax_hm.add_patch(Rectangle((st - 0.5, y - 0.42), 1.0, 0.84,
+            on = st in kept
+            face = colors["cell"] if on else "none"
+            edge = colors["cell_edge"] if on else colors["grid"]
+            ax_hm.add_patch(Rectangle((st - 0.5, y - cell_h / 2), 1.0, cell_h,
                                       facecolor=face, edgecolor=edge,
-                                      linewidth=0.6, alpha=0.95 if st in kept else 0.45))
+                                      linewidth=0.6, alpha=0.95 if on else 0.45))
+
+    # Reference row: all original GS contacts.
+    _draw_row(y_top, contact_stages_model)
+    for i, r in enumerate(sdec_rows):
+        _draw_row(y_of(i), set(_parse_contacts(r.get("contacts", ""), n_stages)))
 
     ax_hm.set_xlim(-0.5, n_stages - 0.5)
-    ax_hm.set_ylim(-0.6, n_rows - 0.4)
+    ax_hm.set_ylim(-0.6, n_grid - 0.4)
     ax_hm.set_xticks(range(n_stages))
     ax_hm.set_xticklabels([str(s) for s in range(n_stages)], fontsize=9)
-    ax_hm.set_yticks([y_of(i) for i in range(n_rows)])
-    ax_hm.set_yticklabels(
-        [f"{_subset_label(r.get('subset_name'))}  ($n_c$={_syncs(r)})" for r in sdec_rows],
-        fontsize=10)
+    yticks = [y_top] + [y_of(i) for i in range(n_rows)]
+    ylabels = [f"GS contacts (all)  ($n_c$={len(contact_stages_model)})"] + \
+        [f"{_subset_label(r.get('subset_name'))}  ($n_c$={_syncs(r)})" for r in sdec_rows]
+    ax_hm.set_yticks(yticks)
+    ax_hm.set_yticklabels(ylabels, fontsize=9)
     ax_hm.set_xlabel("Stage index (T$-$24\\,h $\\rightarrow$ TCA)"
                      if plt.rcParams.get("text.usetex") else
                      "Stage index (T-24h to TCA)")
-    ax_hm.set_title("Kept sync contacts", fontsize=11, color=ink, pad=8)
-
-    # Mark which stages are ever a GS-contact opportunity (model contact grid),
-    # so blank columns that were never candidates are visually distinct.
-    if contact_stages_model:
-        for st in range(n_stages):
-            if st in contact_stages_model:
-                ax_hm.plot([st], [n_rows - 0.28], marker="v", ms=5,
-                           color=colors["cen"], clip_on=False)
+    ax_hm.set_title("Kept sync contacts", fontsize=11, color=ink, pad=6)
 
     # -------- bar panel (expected return) --------
+    # No bar on the top reference row (it has no return of its own).
     for i, r in enumerate(sdec_rows):
         y = y_of(i)
         ret = sdec_ret[i]
-        ax_bar.barh(y, ret - xlo, left=xlo, height=0.62,
+        ax_bar.barh(y, ret - xlo, left=xlo, height=cell_h,
                     color=colors["bar"], edgecolor=colors["cell_edge"],
                     linewidth=0.5, alpha=0.9)
-        coll = _fnum(r.get("collision_prob_matrix"), None)
-        coll_txt = f", coll {coll*100:.2f}\\%" if (coll is not None and plt.rcParams.get("text.usetex")) \
-            else (f", coll {coll*100:.2f}%" if coll is not None else "")
-        ax_bar.text(ret + 0.015 * span, y, f"{ret:.2f}{coll_txt}",
-                    va="center", ha="left", fontsize=9, color=ink)
+        # Value label just outside the (now thin) panel's right edge.
+        ax_bar.text(xhi + 0.04 * span, y, f"{ret:.2f}", clip_on=False,
+                    va="center", ha="left", fontsize=8, color=ink)
 
-    # Centralized rail: dashed line + tol band.
+    # Centralized rail (dashed) and Dec rail (dotted) as references.
     if cen_ret is not None:
-        ax_bar.axvspan(cen_ret - tol, cen_ret + tol, color=colors["band"],
-                       alpha=0.18, lw=0)
         ax_bar.axvline(cen_ret, color=colors["cen"], ls="--", lw=1.6,
                        label=f"Centralized rail ({cen_ret:.2f})")
     if dec_ret is not None and (cen_ret is None or abs(dec_ret - cen_ret) > 1e-9):
@@ -336,26 +377,24 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, tol, colors, theme, titl
 
     ax_bar.set_xlim(xlo, xhi)
     ax_bar.set_xlabel("Expected return")
-    ax_bar.set_title("Performance vs. rails", fontsize=11, color=ink, pad=8)
+    # The panel is intentionally thin: only two x-ticks (the two rails) so the
+    # tick labels never collide.
+    from matplotlib.ticker import MaxNLocator
+    ax_bar.xaxis.set_major_locator(MaxNLocator(nbins=2, prune="both"))
+    ax_bar.tick_params(axis="x", labelsize=8)
     plt.setp(ax_bar.get_yticklabels(), visible=False)
     ax_bar.tick_params(axis="y", length=0)
 
     # Legend placed ABOVE the panels so it never overlaps the data.
     handles = [Patch(facecolor=colors["cell"], edgecolor=colors["cell_edge"],
-                     label="Kept sync contact")]
-    if contact_stages_model:
-        handles.append(plt.Line2D([0], [0], marker="v", ls="none",
-                                  color=colors["cen"], label="GS-contact stage"))
+                     label="Sync contact")]
     if cen_ret is not None:
         handles.append(plt.Line2D([0], [0], color=colors["cen"], ls="--",
                                   label="Centralized rail"))
-        handles.append(Patch(facecolor=colors["band"], alpha=0.18,
-                             label=f"$\\pm$ tol band ($\\pm${tol:g})"
-                             if plt.rcParams.get("text.usetex") else f"+/- tol ({tol:g})"))
     if dec_ret is not None:
         handles.append(plt.Line2D([0], [0], color=colors["dec"], ls=":",
                                   label="Dec rail"))
-    leg = fig.legend(handles=handles, loc="upper center", ncol=min(3, len(handles)),
+    leg = fig.legend(handles=handles, loc="upper center", ncol=len(handles),
                      bbox_to_anchor=(0.57, 0.99), frameon=False, fontsize=9)
     for t in leg.get_texts():
         t.set_color(ink)
@@ -403,12 +442,19 @@ def main():
                          "n_stages). Use if the model can't be imported and n_stages is absent.")
     ap.add_argument("--conj", default=None,
                     help="Filter to a single conjunction label (else one figure per label).")
+    ap.add_argument("--conj-file",
+                    default=os.path.join("notes", "conj_cases_spherical.json"),
+                    help="Conjunction orbit specs; the top 'GS contacts (all)' row + the stage "
+                         "grid are recomputed per conjunction from these orbits (authoritative). "
+                         "Falls back to the peeled-contact union if brahe can't be imported.")
     args = ap.parse_args()
 
     # Resolve paths relative to this script's directory when not absolute,
     # so it runs the same from any cwd.
     csv_path = args.csv if os.path.isabs(args.csv) else os.path.join(_HERE, args.csv)
     out_dir = args.out_dir if os.path.isabs(args.out_dir) else os.path.join(_HERE, args.out_dir)
+    conj_file = args.conj_file if os.path.isabs(args.conj_file) \
+        else os.path.join(_HERE, args.conj_file)
 
     _setup_typography()
     colors = _theme_colors(args.theme)
@@ -424,7 +470,11 @@ def main():
         rows = _read_rows(csv_path)
         if not rows:
             raise SystemExit(f"No rows in {csv_path}")
-    n_stages = _resolve_n_stages(rows, override=args.n_stages)
+    # Authoritative per-conjunction GS-contact grid, recomputed from the orbits.
+    gs_by_label = _gs_contacts_from_orbits(conj_file) if os.path.exists(conj_file) else {}
+    if not gs_by_label:
+        print(f"[gs-contacts] no orbit grid (missing {conj_file} or brahe); "
+              f"top row falls back to the peeled-contact union")
 
     # Group by conjunction label.
     labels = []
@@ -449,11 +499,25 @@ def main():
             print(f"[skip] label {label!r}: no sdec rows")
             continue
 
+        # Per-conjunction grid (head_on != oblique != cross_track). Precedence:
+        # --n-stages override > recomputed-from-orbits > this group's data.
+        gs_n, contacts_all = gs_by_label.get(label, (None, None))
+        if args.n_stages:
+            n_stages = int(args.n_stages)
+        elif gs_n:
+            n_stages = gs_n
+        else:
+            n_stages = _n_stages_from_rows(grp)
+        # Guard: never clip a peeled contact index that lives beyond the grid.
+        n_stages = max(n_stages, _n_stages_from_rows(grp))
+        print(f"[stages] label={label!r} N_STAGES={n_stages}"
+              f"{' (from orbits)' if gs_n else ''}")
+
         pretty = label.replace("_", " ")
         pretty = pretty[:1].upper() + pretty[1:] if pretty else "Conjunction"
         title = f"Greedy contact peel-down: {pretty}" if label else "Greedy contact peel-down"
-        fig = _make_figure(sdec_rows, cen_row, dec_row, n_stages, args.tol,
-                           colors, args.theme, title)
+        fig = _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all,
+                           args.tol, colors, args.theme, title)
 
         base = f"peel_heatmap_{args.tag}"
         if len(labels) > 1 and label:
