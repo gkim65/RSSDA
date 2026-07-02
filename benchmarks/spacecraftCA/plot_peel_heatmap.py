@@ -383,10 +383,14 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
 
     cell_h = 0.78  # cells nearly fill each unit row -> compact, no fat gaps
 
-    def _rate_alpha(rate):
-        # Any nonzero burn shows; alpha scales with frequency (floor so rare burns
-        # are still visible, ceil so 100% isn't pure-solid over the base cell).
-        return 0.0 if rate <= 0 else 0.30 + 0.60 * min(1.0, rate)
+    def _hatch_density(rate, glyph):
+        # Full-alpha hatch; DENSITY encodes burn frequency. matplotlib sets hatch
+        # spacing by how many times the glyph repeats: more glyphs => finer lines.
+        # 4 tiers so rare vs frequent burns read at a glance.
+        if rate <= 0:
+            return None
+        n = 1 if rate < 0.25 else 2 if rate < 0.5 else 3 if rate < 0.85 else 5
+        return glyph * n
 
     def _draw_row(y, kept, sc1_rate=None, sc2_rate=None):
         for st in range(n_stages):
@@ -396,16 +400,17 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
             ax_hm.add_patch(Rectangle((st - 0.5, y - cell_h / 2), 1.0, cell_h,
                                       facecolor=face, edgecolor=edge,
                                       linewidth=0.6, alpha=0.95 if on else 0.45))
-            # Maneuver overlay: SC1 -> "///", SC2 -> "\\\\" hatch, alpha ~ burn rate.
-            for rates, hatch in ((sc1_rate, "////"), (sc2_rate, "\\\\\\\\")):
+            # Maneuver overlay: SC1 -> "/" family, SC2 -> "\" family. Full alpha;
+            # hatch density scales with how often that spacecraft burns there.
+            for rates, glyph in ((sc1_rate, "/"), (sc2_rate, "\\")):
                 if not rates:
                     continue
-                a = _rate_alpha(rates[st])
-                if a <= 0:
+                hatch = _hatch_density(rates[st], glyph)
+                if hatch is None:
                     continue
                 ax_hm.add_patch(Rectangle((st - 0.5, y - cell_h / 2), 1.0, cell_h,
                                           facecolor="none", edgecolor=colors["burn"],
-                                          hatch=hatch, linewidth=0.0, alpha=a))
+                                          hatch=hatch, linewidth=0.7, alpha=1.0))
 
     # Reference row: all original GS contacts (no policy => no burns).
     _draw_row(y_top, contact_stages_model)
@@ -462,10 +467,11 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
     handles = [Patch(facecolor=colors["cell"], edgecolor=colors["cell_edge"],
                      label="Sync contact")]
     if burn_group:  # only advertise the overlay when burn data was supplied
-        handles.append(Patch(facecolor="none", edgecolor=colors["burn"],
-                             hatch="////", label="SC1 maneuver"))
-        handles.append(Patch(facecolor="none", edgecolor=colors["burn"],
-                             hatch="\\\\\\\\", label="SC2 maneuver"))
+        # Density = burn frequency; show a mid-density swatch for each spacecraft.
+        handles.append(Patch(facecolor="none", edgecolor=colors["burn"], lw=0.7,
+                             hatch="///", label="SC1 maneuver"))
+        handles.append(Patch(facecolor="none", edgecolor=colors["burn"], lw=0.7,
+                             hatch="\\\\\\", label="SC2 maneuver"))
     if cen_ret is not None:
         handles.append(plt.Line2D([0], [0], color=colors["cen"], ls="--",
                                   label="Centralized rail"))
