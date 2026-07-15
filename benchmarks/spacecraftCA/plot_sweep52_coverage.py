@@ -61,9 +61,11 @@ def plot_sweep(json_path, out_stem, dark=False):
     cmap = plt.get_cmap("turbo")
     norm = plt.Normalize(0, 120)                       # Δi color scale (deg)
 
-    fig = plt.figure(figsize=(8.0, 3.3))
-    # 3 projection panels + a slim colorbar column
-    gs = fig.add_gridspec(1, 4, width_ratios=[1, 1, 1, 0.06], wspace=0.12)
+    fig = plt.figure(figsize=(8.5, 3.4))
+    # 3 projection panels + a slim colorbar column. wspace gives each panel's
+    # ECI y-axis label room to clear the neighbor panel's data box (the axes
+    # were too tight before, overlapping label text with lines).
+    gs = fig.add_gridspec(1, 4, width_ratios=[1, 1, 1, 0.05], wspace=0.30)
     axes = [fig.add_subplot(gs[0, j]) for j in range(3)]
     cax = fig.add_subplot(gs[0, 3])
     proj2d = list(zip(axes, ["xy", "xz", "yz"]))
@@ -106,6 +108,14 @@ def plot_sweep(json_path, out_stem, dark=False):
 
     axes[0].legend(fontsize=8, loc="upper right", framealpha=0.0,
                    labelcolor=fg)
+
+    # Shrink the colorbar to the panels' actual (square) drawn height instead of
+    # the full gridspec cell, so it lines up with the boxes rather than towering
+    # over them. Panels are aspect="equal", so their rendered height < cell height.
+    fig.canvas.draw()
+    p0 = axes[0].get_position()
+    cpos = cax.get_position()
+    cax.set_position([cpos.x0, p0.y0, cpos.width, p0.height])
 
     sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
     sm.set_array([])
