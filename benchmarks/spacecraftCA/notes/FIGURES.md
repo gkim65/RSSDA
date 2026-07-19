@@ -3,11 +3,17 @@
 Index of the paper/slide figures, the script that generates each, and the exact command.
 Output goes to `benchmarks/spacecraftCA/notes/figures/`.
 
-> **TODO (commit hygiene):** `plot_v2_concept.py` is not committed yet. Before committing it,
-> clean up the script first — the schematic panels (`concept_1/2/3`) still contain glyphs
-> (✓ ✗ ° %) that break under `text.usetex=True`, and there may be other dead/rough bits.
-> When we do commit, scope it to ONLY the figures we actually want in the repo (don't blanket-
-> add every PNG/PDF/SVG in `notes/figures/` — many are scratch/experiment outputs).
+> **⭐ Figures used in the FINAL PAPER** (sections marked ⭐ below):
+> - `reward.pdf` — two-ramp terminal reward → [`plot_reward.py`](../plot_reward.py)
+> - `sweep52_coverage.pdf` — 52-conjunction coverage → [`plot_sweep52_coverage.py`](../plot_sweep52_coverage.py)
+> - `summary_violin_all9_boxonly.pdf` — planners vs operator floor → [`plot_summary_violin.py`](../baselines_spacecraftCA/plot_summary_violin.py)
+
+> **Note on `plot_v2_concept.py`:** the paper's reward figure was factored out into the
+> standalone [`plot_reward.py`](../plot_reward.py) (committed). `plot_v2_concept.py` still holds
+> the schematic *explainer* panels (`concept_1/2/3`), which are slide-only and contain glyphs
+> (✓ ✗ °) that break under `text.usetex=True` — clean those before committing that script.
+> When committing figures, scope it to ONLY the ones we actually want (don't blanket-add every
+> PNG/PDF/SVG in `notes/figures/` — many are scratch/experiment outputs).
 
 ## Conventions (all figures)
 
@@ -94,7 +100,7 @@ spread of conjunction geometries `(perp, δpT0)`, comparing the reduced-model mi
 
 ---
 
-## `reward.pdf` — two-ramp terminal reward (v2)
+## `reward.pdf` — two-ramp terminal reward (v2)  ⭐ USED IN THE FINAL PAPER
 
 **What it shows:** the v2 terminal reward as two opposing ramps vs miss distance at TCA —
 a **risk ramp** (near-field collision penalty, floor −10000, cleared by 5 km) and a
@@ -104,14 +110,14 @@ the −10000 risk floor and the shallow displacement bowl are both legible on on
 **zoom panel** (x 4–7 km, reward 0…−2) details the handoff. A dotted rectangle on the main
 panel marks the zoom window.
 
-**Script:** [`plot_v2_concept.py`](../plot_v2_concept.py) → `plot_two_ramp_reward()`
+**Script:** [`plot_reward.py`](../plot_reward.py) — a self-contained script (factored out of
+`plot_v2_concept.py`, which also holds schematic explainer panels **not** used in the paper).
 
 **Command:**
 ```bash
-.venv/bin/python -c "import sys; sys.path.insert(0,'benchmarks/spacecraftCA'); \
-  import plot_v2_concept as P; P.plot_two_ramp_reward()"
+.venv/bin/python benchmarks/spacecraftCA/plot_reward.py
 ```
-(or from `benchmarks/spacecraftCA/`: `../../.venv/bin/python -c "import plot_v2_concept as P; P.plot_two_ramp_reward()"`)
+(one call writes the paper PDF + PNG/SVG + all black-slide variants).
 
 **Outputs (one call writes all):**
 - `reward.pdf` — **the paper figure**, annotated, normal line weight, transparent.
@@ -156,7 +162,8 @@ break under `text.usetex=True`; sanitize before a full `__main__` run with LaTeX
 - `concept_1_state_decomposition` — `plot_state_decomposition()` — (δT, perp) geometry: miss = hypotenuse.
 - `concept_2_v1_bug` — `plot_v1_bug()` — burn+counterburn in the (δT, vdev) phase plane.
 - `concept_3_conjunction_types` — `plot_conjunction_types()` — head-on / oblique / cross-track via perp.
-- `concept_0_overview` — `plot_combined()` — 2×2 sheet of all four panels.
+- `concept_0_overview` — `plot_combined()` — 2×2 sheet of all four panels (the three schematic
+  ones plus the reward panel; the reward panel itself is the paper figure, see `plot_reward.py`).
 
 ---
 
@@ -280,7 +287,7 @@ figure visualizes, and the peel run command in the top-level `CLAUDE.md`.
 
 ---
 
-## `sweep52_coverage.{png,pdf,svg}` — the 52-conjunction evaluation suite
+## `sweep52_coverage.{png,pdf,svg}` — the 52-conjunction evaluation suite  ⭐ USED IN THE FINAL PAPER
 
 **What it shows:** the full evaluation suite as the ECI orbit of the secondary spacecraft
 (SC2) in each of the 52 conjunctions, in three projections (**XY / XZ / YZ**). The Earth is
@@ -318,7 +325,7 @@ PYTHONPATH=. ../../.venv/bin/python -u plot_sweep52_coverage.py \
 
 ---
 
-## `summary_violin_all9_boxonly.{pdf,svg,png}` — planners vs operator-heuristic floor
+## `summary_violin_all9_boxonly.{pdf,svg,png}` — planners vs operator-heuristic floor  ⭐ USED IN THE FINAL PAPER
 
 **What it shows:** the headline comparison of miss-distance-at-TCA distributions for all nine
 strategies on one horizontal axis, grouped into two blocks: the three **optimized planners**
