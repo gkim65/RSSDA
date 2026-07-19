@@ -257,12 +257,26 @@ pass the whole tag through and let `_fam` facet on the conjunction's actual star
 figure. **Left** = a heatmap whose columns span **all** stages `0 .. N_STAGES-1` (T−24h→TCA)
 and whose rows are the SDec subsets the search tried, **top-to-bottom in greedy order**
 (window → each `greedy_drop*` → `minimal`); a shaded cell marks a **kept** sync contact, so
-you watch the contacts get peeled away against the sparse full grid. Red ▼ markers over the
-columns flag the GS-contact stages available for that conjunction. **Right** = a bar per row
-for **expected return**, with the numeric return + collision % printed at each bar end, a
-dashed **Centralized rail** and its **±tol band**, and a dotted **Dec rail** for reference.
-The story: return holds on the Centralized rail as contacts drop — until (under a loose tol)
-it doesn't, which is exactly how the figure exposes over-peeling.
+you watch the contacts get peeled away against the sparse full grid. The **`Minimal`** row
+(the greedy search's terminal, sparsest surviving subset) gets its own faint highlight band
+plus a bold accent-colored row label so it doesn't read as just another `greedy_drop*` row.
+**Right** = a bar per row for **expected return** (`Delta return vs. centralized`, wrapped to
+two lines to fit the narrow panel), with the numeric value printed at each bar end, a dashed
+**Centralized rail**, and a dotted **Dec rail** for reference. The story: return holds on the
+Centralized rail as contacts drop — until (under a loose tol) it doesn't, which is exactly how
+the figure exposes over-peeling.
+
+**Maneuver (burn) overlay — optional, via `--burn-json`:** each kept-contact cell can also carry
+a hashed-red overlay showing which spacecraft burned at that stage: SC1 → `///`, SC2 → `\\\`
+(hatch **direction** is the categorical channel — which spacecraft). Hatch **opacity** is the
+quantitative channel and scales linearly with the fraction of rollouts that burned there (floored
+so a rare-but-nonzero burn stays visible instead of vanishing) — a faint hatch means a rare burn,
+a solid one means a near-certain burn. A one-line caption stating this is drawn under the figure
+whenever the overlay is present. It is normal, expected behavior for a burn hatch to sit on top of
+a kept sync-contact cell: a sync is an information event (belief exchange over the ground link)
+and a burn is a control event, and the peel tends to keep exactly the contacts that sit right
+before a maneuver decision (freshest shared belief informing the burn) — that overlap is the peel
+finding the informative contacts, not a data bug.
 
 **Script:** [`plot_peel_heatmap.py`](../plot_peel_heatmap.py)
 
@@ -276,25 +290,54 @@ it doesn't, which is exactly how the figure exposes over-peeling.
 
 **Commands** (run from repo root):
 ```bash
-# From wandb — the tol=5 exploration run (over-peels; entity/project defaults shown explicitly):
-.venv/bin/python benchmarks/spacecraftCA/plot_peel_heatmap.py \
-  --source wandb --wandb-entity kmeans_gsopt --wandb-project spacecraftCAsyncs \
-  --tag syncs_tol5
-# The exact-match tol=0.001 run — just swap the project (and give it its own tag):
+# From wandb — the closemiss tol=0.001 peel run (project spacecraftCAsyncsTol, group/tag
+# peel_closemiss_tol001; entity/project defaults shown explicitly). Omit --conj to render
+# all three conjunctions (head_on / oblique / cross_track) in one pass:
 .venv/bin/python benchmarks/spacecraftCA/plot_peel_heatmap.py \
   --source wandb --wandb-entity kmeans_gsopt --wandb-project spacecraftCAsyncsTol \
-  --tag closemiss_tol001
+  --wandb-tag peel_closemiss_tol001 --tag peel_closemiss_tol001 --tol 0.001 \
+  --conj head_on
 # From a local peel CSV instead:
 .venv/bin/python benchmarks/spacecraftCA/plot_peel_heatmap.py \
   --source csv --csv notes/results/peel_peel_headline.csv --tag peel_headline
 ```
 One figure per conjunction (`label`) is written unless `--conj <label>` filters to one.
 
+**Adding the maneuver overlay** (needs the peel run's per-cell rollout `.npz` files — the dir
+passed to `peel_contacts.py --save-rollouts`, e.g. `notes/results/rollouts_peel_closemiss_tol001/`;
+these are `.gitignore`d, so this step only works where that dir exists locally or on whatever
+box ran the peel):
+```bash
+# Step 1 — extract per-stage burn rates from the rollout .npz cells into a JSON overlay map
+# (all three conjunction labels in one JSON if --label is omitted):
+.venv/bin/python benchmarks/spacecraftCA/inspect_burn_stages.py \
+  --dir benchmarks/spacecraftCA/notes/results/rollouts_peel_closemiss_tol001 \
+  --frac 0.5 --json burn_stages_closemiss.json
+
+# Step 2 — render with the overlay:
+.venv/bin/python benchmarks/spacecraftCA/plot_peel_heatmap.py \
+  --source wandb --wandb-entity kmeans_gsopt --wandb-project spacecraftCAsyncsTol \
+  --wandb-tag peel_closemiss_tol001 --tag peel_closemiss_tol001 --tol 0.001 \
+  --burn-json burn_stages_closemiss.json
+```
+`--frac 0.5` = a stage counts as "burned" (for the printed summary / `burn_stages`/`sc1`/`sc2`
+lists) if ≥50% of rollouts burn there (0 = any, 1 = all) — the overlay's opacity itself always
+uses the raw per-stage rate (`sc1_rate`/`sc2_rate`) regardless of `--frac`. If you see no hatches
+in the rendered figure, check the `[burns] ... no match for contacts=...` lines in the script's
+stdout: it means the JSON's subset keys (`c<stage>-<stage>-...`) didn't line up with the wandb
+run's `contacts` field for that row — cross-check the label and subset naming between the two.
+
+**`--init-miss true` ("true belief") sweeps, e.g. `truebelief_spherical50`:** don't filter these
+with `--filter init_miss=...` — there is no single fixed belief-center to slice on, since the
+belief is initialized from the true miss distance per-conjunction rather than a shared constant.
+
 **Useful flags:** `--wandb-tag <group>` filters to a single peel run's `group` when a project
-holds several; `--theme light|dark` picks foreground ink for white vs black backgrounds;
-`--tol` sets the width of the ±tol band drawn at the rail (default 0.001, match the peel run);
-`--n-stages N` forces the column count when the model can't be imported and the data lacks an
-`n_stages` field (normally auto: model → data → this override).
+holds several; `--theme light|dark` picks foreground ink for white vs black backgrounds (`dark`
+also flips the maneuver-hatch color to something legible on black); `--tol` sets the width of the
+±tol band drawn at the rail (default 0.001, match the peel run); `--n-stages N` forces the column
+count when the model can't be imported and the data lacks an `n_stages` field (normally auto:
+model → data → this override); `--burn-json PATH` adds the maneuver overlay (see above; omit for
+no overlay).
 
 **Key implementation notes:**
 - `N_STAGES` resolves model (`spacecraft_stage_grid.N_STAGES`) → data-derived → `--n-stages`.

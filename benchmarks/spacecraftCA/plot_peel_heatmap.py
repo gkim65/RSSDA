@@ -367,13 +367,15 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
     has_dec_row = dec_row is not None
     n_grid = n_rows + 1 + (1 if has_dec_row else 0)
 
-    # Figure size: fit an 8.5x11 page. Rows are short so the figure stays compact.
-    fig_h = min(5.0, 1.3 + 0.24 * n_grid)
+    # Figure size: fit an 8.5x11 page. Rows are short so the figure stays compact. A bit
+    # of extra fixed height is budgeted for the stacked suptitle+legend (top) and
+    # xlabel+caption (bottom) text bands, so they get real room instead of overlapping.
+    fig_h = min(5.6, 1.7 + 0.24 * n_grid)
     fig = plt.figure(figsize=(8.0, fig_h))
     fig.patch.set_alpha(0.0)
     # Left = stage heatmap, right = a thin return-bar strip (~1/8 of the width).
     gs = fig.add_gridspec(1, 2, width_ratios=[6.5, 0.9], wspace=0.04,
-                          left=0.24, right=0.88, top=0.80, bottom=0.17)
+                          left=0.24, right=0.88, top=0.85, bottom=0.17)
     ax_hm = fig.add_subplot(gs[0, 0])
     ax_bar = fig.add_subplot(gs[0, 1], sharey=ax_hm)
 
@@ -404,17 +406,14 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
             contact_stages_model |= set(_parse_contacts(r.get("contacts", ""), n_stages))
 
     cell_h = 0.78  # cells nearly fill each unit row -> compact, no fat gaps
+    _MIN_BURN_ALPHA = 0.18  # floor so a rare-but-nonzero burn is still visible, not invisible
 
-    def _hatch_density(rate, glyph):
-        # Full-alpha hatch; DENSITY encodes burn frequency. matplotlib sets hatch
-        # spacing by how many times the glyph repeats: more glyphs => finer lines.
-        # 4 tiers so rare vs frequent burns read at a glance.
-        if rate <= 0:
-            return None
-        n = 1 if rate < 0.25 else 2 if rate < 0.5 else 3 if rate < 0.85 else 5
-        return glyph * n
-
-    def _draw_row(y, kept, sc1_rate=None, sc2_rate=None):
+    def _draw_row(y, kept, sc1_rate=None, sc2_rate=None, highlight=False):
+        if highlight:
+            # Row band behind the cells so the "Minimal" row reads as distinct at a glance.
+            ax_hm.add_patch(Rectangle((-0.5, y - cell_h / 2 - 0.06), n_stages, cell_h + 0.12,
+                                      facecolor=colors["cen"], edgecolor="none", alpha=0.10,
+                                      zorder=0))
         for st in range(n_stages):
             on = st in kept
             face = colors["cell"] if on else "none"
@@ -422,24 +421,25 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
             ax_hm.add_patch(Rectangle((st - 0.5, y - cell_h / 2), 1.0, cell_h,
                                       facecolor=face, edgecolor=edge,
                                       linewidth=0.6, alpha=0.95 if on else 0.45))
-            # Maneuver overlay: SC1 -> "/" family, SC2 -> "\" family. Full alpha;
-            # hatch density scales with how often that spacecraft burns there.
+            # Maneuver overlay: SC1 -> "/" hatch, SC2 -> "\" hatch (fixed pattern; direction
+            # is the categorical channel). ALPHA is the quantitative channel and scales
+            # linearly with burn frequency, floored so a rare burn doesn't vanish.
             for rates, glyph in ((sc1_rate, "/"), (sc2_rate, "\\")):
-                if not rates:
+                if not rates or rates[st] <= 0:
                     continue
-                hatch = _hatch_density(rates[st], glyph)
-                if hatch is None:
-                    continue
+                a = max(_MIN_BURN_ALPHA, min(1.0, rates[st]))
                 ax_hm.add_patch(Rectangle((st - 0.5, y - cell_h / 2), 1.0, cell_h,
                                           facecolor="none", edgecolor=colors["burn"],
-                                          hatch=hatch, linewidth=0.7, alpha=1.0))
+                                          hatch=glyph * 3, linewidth=0.7, alpha=a))
 
     # Reference row: all original GS contacts (no policy => no burns).
     _draw_row(y_top, contact_stages_model)
     for i, r in enumerate(sdec_rows):
         contacts_str = r.get("contacts", "")
         s1, s2 = _burn_rates_for_row(burn_group, contacts_str, n_stages)
-        _draw_row(y_of(i), set(_parse_contacts(contacts_str, n_stages)), s1, s2)
+        is_minimal = (r.get("subset_name") or "").strip() == "minimal"
+        _draw_row(y_of(i), set(_parse_contacts(contacts_str, n_stages)), s1, s2,
+                  highlight=is_minimal)
     # Dec row (bottom): empty sync grid (never syncs) + its own burn hatches.
     if has_dec_row:
         d1, d2 = _burn_rates_by_key(burn_group, "__dec__", n_stages)
@@ -450,17 +450,27 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
     ax_hm.set_xticks(range(n_stages))
     ax_hm.set_xticklabels([str(s) for s in range(n_stages)], fontsize=9)
     yticks = [y_top] + [y_of(i) for i in range(n_rows)]
+    minimal_flags = [False] + \
+        [(r.get("subset_name") or "").strip() == "minimal" for r in sdec_rows]
     ylabels = [f"GS contacts (all)  ($n_c$={len(contact_stages_model)})"] + \
-        [f"{_subset_label(r.get('subset_name'))}  ($n_c$={_syncs(r)})" for r in sdec_rows]
+        [("$\\mathbf{Minimal}$" if minimal_flags[1 + i] else _subset_label(r.get('subset_name')))
+         + f"  ($n_c$={_syncs(r)})"
+         for i, r in enumerate(sdec_rows)]
     if has_dec_row:
         yticks.append(y_dec)
         ylabels.append("Dec (no syncs)  ($n_c$=0)")
+        minimal_flags.append(False)
     ax_hm.set_yticks(yticks)
     ax_hm.set_yticklabels(ylabels, fontsize=9)
+    # Bold + accent-color the "Minimal" row's own tick label to match its row highlight band.
+    for lbl, is_min in zip(ax_hm.get_yticklabels(), minimal_flags):
+        if is_min:
+            lbl.set_color(colors["cen"])
+            lbl.set_fontweight("bold")
     ax_hm.set_xlabel("Stage index (T$-$24\\,h $\\rightarrow$ TCA)"
                      if plt.rcParams.get("text.usetex") else
                      "Stage index (T-24h to TCA)")
-    ax_hm.set_title("Kept sync contacts", fontsize=11, color=ink, pad=6)
+    ax_hm.set_title("Kept sync contacts", fontsize=11, color=ink, pad=8)
 
     # -------- bar panel (delta return from Centralized) --------
     # Bars run from 0 (the rail) leftward to each row's negative delta. No bar on
@@ -486,9 +496,11 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
                        label=f"Dec rail ({dec_d:+.2f})")
 
     ax_bar.set_xlim(xlo, xhi)
-    ax_bar.set_xlabel("$\\Delta$ return from centralized"
+    # The panel is only ~1/8 the figure width -- a one-line label this long spreads out
+    # to fill it unevenly, so wrap it to two short lines that actually fit the column.
+    ax_bar.set_xlabel("$\\Delta$ return\nvs. centralized"
                       if plt.rcParams.get("text.usetex") else
-                      "Delta return from centralized")
+                      "Delta return\nvs. centralized", fontsize=9, linespacing=1.3)
     # The panel is intentionally thin: only two x-ticks (the two rails) so the
     # tick labels never collide.
     from matplotlib.ticker import MaxNLocator
@@ -501,7 +513,8 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
     handles = [Patch(facecolor=colors["cell"], edgecolor=colors["cell_edge"],
                      label="Sync contact")]
     if burn_group:  # only advertise the overlay when burn data was supplied
-        # Density = burn frequency; show a mid-density swatch for each spacecraft.
+        # Hatch direction = which spacecraft; ALPHA (drawn near-opaque here for legibility
+        # in the swatch itself) is the actual burn-frequency channel -- see the note below.
         handles.append(Patch(facecolor="none", edgecolor=colors["burn"], lw=0.7,
                              hatch="///", label="SC1 maneuver"))
         handles.append(Patch(facecolor="none", edgecolor=colors["burn"], lw=0.7,
@@ -513,11 +526,20 @@ def _make_figure(sdec_rows, cen_row, dec_row, n_stages, contacts_all, burn_group
         handles.append(plt.Line2D([0], [0], color=colors["dec"], ls=":",
                                   label="Dec rail"))
     leg = fig.legend(handles=handles, loc="upper center", ncol=min(len(handles), 5),
-                     bbox_to_anchor=(0.57, 0.99), frameon=False, fontsize=9)
+                     bbox_to_anchor=(0.57, 0.955), frameon=False, fontsize=9)
     for t in leg.get_texts():
         t.set_color(ink)
 
-    fig.suptitle(title, y=1.015, fontsize=13, color=ink)
+    if burn_group:
+        fig.text(0.5, 0.055,
+                  "Maneuver hatch opacity $\\propto$ fraction of rollouts that burn at that "
+                  "stage (faint = rare, solid = near-certain)."
+                  if plt.rcParams.get("text.usetex") else
+                  "Maneuver hatch opacity is proportional to the fraction of rollouts that "
+                  "burn at that stage (faint = rare, solid = near-certain).",
+                  ha="center", va="top", fontsize=8, color=ink, style="italic")
+
+    fig.suptitle(title, y=0.985, fontsize=13, color=ink)
     return fig
 
 
