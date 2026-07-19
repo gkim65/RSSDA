@@ -340,18 +340,31 @@ def _shared_edges(df, col, conj_json, families, bins):
 
 
 def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=40,
-                            families=INIT_FAMILIES, pool=False, density=False, alpha=0.45):
+                            families=INIT_FAMILIES, pool=False, density=False, alpha=0.45,
+                            dark=False, bg=False):
     """OVERLAY variant of the miss-shift figure: all three variants drawn on ONE panel per
     starting-miss family, as FILLED semi-transparent histograms with edge outlines, so overlap
     regions blend into a combined color. dec/sdec get solid black outlines; centralized is
     overlaid LAST as a DASHED outline (also alpha-filled) on top -- so you can see it tracing
     over SDec where the two coincide. The initial miss is a dashed vertical line per family.
     With pool=True the four families collapse to a single panel; density=True normalizes each
-    variant to unit area; alpha controls fill transparency."""
+    variant to unit area; alpha controls fill transparency.
+
+    dark=True switches the foreground (text/ticks/spines/legend/reference lines) to white for
+    black-slide use, per the FIGURES.md convention (variant fill colors are unchanged -- only
+    the foreground/background inverts). The figure itself still saves transparent=True (drops
+    onto any slide) unless bg=True, which additionally bakes in an opaque black background
+    (matching the reward_black_bg.pdf pattern) for placing on a non-black page."""
     import matplotlib as mpl
     import matplotlib.pyplot as plt
     # thicker hatch lines (default is 1.0) so the /// and \\\ textures read boldly.
     mpl.rcParams["hatch.linewidth"] = 1.8
+    fg = "white" if dark else "black"
+    ref_line = "0.75" if dark else "0.4"        # per-family initial-miss dashed line
+    ref_pooled = "0.55" if dark else "0.6"      # pooled multi-family reference lines
+    label_color = "0.85" if dark else "0.35"    # "N km" inline annotation ink
+    label_bg = "black" if dark else "white"     # its bbox facecolor
+    ideal_color = "#8fd48f" if dark else "#0b4d0b"   # "Ideal zone at TCA" annotation
     df, fams = _present_families(df, families, pool)
     variants = _ordered_variants(df["variant"].unique())
     edges = _shared_edges(df, col, conj_json, families, bins)
@@ -421,26 +434,28 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
         if isinstance(fam, float):
             # dashed line at the family's starting miss, annotated INLINE ("N km") near the top of
             # the panel. No legend entry -- a single legend would otherwise show only one family.
-            ax.axvline(fam, color="0.4", ls="--", lw=1.4)
-            ax.text(fam, 0.80, f"{fam:g} km", transform=ax.get_xaxis_transform(),
-                    ha="center", va="center", rotation=90, fontsize=fs - 4.0, color="0.35",
+            ax.axvline(fam, color=ref_line, ls="--", lw=1.4)
+            ax.text(fam, 0.88, f"{fam:g} km", transform=ax.get_xaxis_transform(),
+                    ha="center", va="center", rotation=90, fontsize=fs - 4.0, color=label_color,
                     style="italic", zorder=5,
-                    bbox=dict(boxstyle="round,pad=0.15", fc="white", ec="none", alpha=0.7))
+                    bbox=dict(boxstyle="round,pad=0.15", fc=label_bg, ec="none", alpha=0.7))
         elif ref:
             for fv in ref:
-                ax.axvline(fv, color="0.6", ls="--", lw=1.0)
+                ax.axvline(fv, color=ref_pooled, ls="--", lw=1.0)
         # ideal-outcome zone at TCA (labeled once, on the 2nd panel, floating in the band).
         ax.axvspan(4.0, 7.0, color="green", alpha=0.07)
         if c == 1:
             ax.text(5.5, 0.97, "Ideal zone\nat TCA", transform=ax.get_xaxis_transform(),
-                    ha="center", va="top", fontsize=fs - 3.5, color="#0b4d0b",
+                    ha="center", va="top", fontsize=fs - 3.5, color=ideal_color,
                     style="italic", zorder=1)
         ax.set_title(f"Initial miss: {fam:g} km" if isinstance(fam, float) else "All starts pooled",
-                     fontsize=fs)
-        ax.set_xlabel(_col_label(col), fontsize=fs)
+                     fontsize=fs, color=fg)
+        ax.set_xlabel(_col_label(col), fontsize=fs, color=fg)
         if c == 0:
-            ax.set_ylabel("Density" if density else "Rollouts", fontsize=fs)
-        ax.tick_params(labelsize=fs - 1.5)
+            ax.set_ylabel("Density" if density else "Rollouts", fontsize=fs, color=fg)
+        ax.tick_params(labelsize=fs - 1.5, color=fg, labelcolor=fg)
+        for sp in ax.spines.values():
+            sp.set_color(fg)
         # raise the y-ceiling to (tallest bar + 400) so the legend clears the bars -- same
         # y-scaling, just extra empty headroom at the top. (density mode keeps its auto range.)
         if y_top is not None:
@@ -448,13 +463,20 @@ def plot_miss_shift_overlay(df, tag, conj_json=None, col="brahe_miss_km", bins=4
         # legend only on the FIRST panel; the "Ideal zone" label lives on the 2nd panel so the
         # two don't compete.
         if c == 0:
-            ax.legend(fontsize=fs - 3.5, loc="upper right", handlelength=1.4,
-                      borderpad=0.4, labelspacing=0.3)
+            leg = ax.legend(fontsize=fs - 3.5, loc="upper right", handlelength=1.4,
+                            borderpad=0.4, labelspacing=0.3, framealpha=0.0, labelcolor=fg)
 
     fig.suptitle(f"Final {_col_label(col)} by variant{' (pooled)' if pool else ''}",
-                 fontsize=fs + 1.5)
+                 fontsize=fs + 1.5, color=fg)
     fig.tight_layout(rect=[0, 0, 1, 0.95])
-    _save(fig, tag, "miss_shift_overlay_pooled" if pool else "miss_shift_overlay")
+    if bg:
+        fig.patch.set_facecolor("black")
+        for ax in axes:
+            ax.set_facecolor("black")
+    name = "miss_shift_overlay_pooled" if pool else "miss_shift_overlay"
+    if dark:
+        name += "_black"
+    _save(fig, tag, name, transparent=not bg)
 
 
 def plot_matrix_error(df, tag, fs=13.0):
@@ -587,6 +609,12 @@ def main():
                     help="normalize histograms to unit area (density) instead of raw counts.")
     ap.add_argument("--alpha", type=float, default=0.45,
                     help="fill transparency for the overlay histograms (default 0.45).")
+    ap.add_argument("--dark", action="store_true",
+                    help="white foreground (text/ticks/spines/legend) for black-slide use. "
+                         "Applies to --miss-shift-overlay; saves transparent=True unless --bg.")
+    ap.add_argument("--bg", action="store_true",
+                    help="bake in an opaque black background (with --dark) instead of "
+                         "transparent, for placing on a non-black page.")
     ap.add_argument("--conj-json", default=None,
                     help="conj_sweep_*.json to recompute the initial (no-maneuver) miss "
                          "spread from, for the --miss-shift reference histograms.")
@@ -635,7 +663,8 @@ def main():
             suffix = "_".join(f"{k}{v}" for k, v in sorted(filters.items()))
             shift_tag = f"{args.tag}_{suffix}"
         plot_miss_shift_overlay(df, shift_tag, conj_json=args.conj_json, col=args.col,
-                                pool=args.pool, density=args.density, alpha=args.alpha)
+                                pool=args.pool, density=args.density, alpha=args.alpha,
+                                dark=args.dark, bg=args.bg)
     if args.matrix_error:
         err_tag = args.tag
         if filters:

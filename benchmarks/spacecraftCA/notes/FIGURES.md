@@ -167,7 +167,7 @@ break under `text.usetex=True`; sanitize before a full `__main__` run with LaTeX
 
 ---
 
-## `rollout_miss_shift_overlay[_pooled]_<tag>[_<filter>].{png,pdf,svg}` — initial→final miss
+## `rollout_miss_shift_overlay[_pooled][_black]_<tag>[_<filter>].{png,pdf,svg}` — initial→final miss
 
 **What it shows:** the per-rollout distribution of **final miss distance at TCA** for each
 variant (centralized / SDec / Dec), against the **initial** miss the conjunctions started at.
@@ -193,6 +193,21 @@ J=benchmarks/spacecraftCA/notes/conj_sweep_spherical_50.json
 # pooled:
 .venv/bin/python benchmarks/spacecraftCA/plot_rollout_dist.py \
   --tag sweep50_drag --miss-shift-overlay --pool --conj-json $J --filter init_miss=0.5
+# black-slide theme (white foreground, transparent bg -- drops onto any slide):
+.venv/bin/python benchmarks/spacecraftCA/plot_rollout_dist.py \
+  --tag sweep50_drag --miss-shift-overlay --conj-json $J --filter init_miss=0.5 --dark
+# same, but with the black background BAKED IN (opaque) for a non-black page:
+.venv/bin/python benchmarks/spacecraftCA/plot_rollout_dist.py \
+  --tag sweep50_drag --miss-shift-overlay --conj-json $J --filter init_miss=0.5 --dark --bg
+```
+
+**No fixed-belief sweep required** — for a `--init-miss true` ("true belief": each
+conjunction's belief centered on its own true miss, e.g. `truebelief_spherical50`) sweep, drop
+`--filter init_miss=...` entirely; there is no single fixed belief-center to slice on, so just
+pass the whole tag through and let `_fam` facet on the conjunction's actual starting `miss_km`:
+```bash
+.venv/bin/python benchmarks/spacecraftCA/plot_rollout_dist.py \
+  --tag truebelief_spherical50 --miss-shift-overlay --conj-json $J
 ```
 
 **Styling (per-variant, in `_VARIANT_STYLE` / `_VARIANT_COLORS` / `_VARIANT_LABELS`):**
@@ -208,6 +223,13 @@ J=benchmarks/spacecraftCA/notes/conj_sweep_spherical_50.json
   TCA"** 4–7 km band is the reference.
 - **Panel roles:** legend on the **1st** panel, "ideal zone at TCA" label on the **2nd**, so the
   two don't overlap. Panel title is "Initial miss: N km".
+- **`--dark`** (per FIGURES.md's shared dark-slide convention): flips text/ticks/spines/legend
+  to **white**, lightens the initial-miss reference line/label greys, and brightens the "Ideal
+  zone at TCA" annotation to a pale green — **variant fill colors are unchanged** (only
+  foreground/background inverts). Saves `transparent=True` by default (drops onto any slide);
+  add **`--bg`** to instead bake in an **opaque black** background (matching the
+  `reward_black.pdf` vs `reward_black_bg.pdf` pattern) for placing on a non-black page. Output
+  filename gets a `_black` suffix (before the tag) when `--dark` is set.
 
 **Layout / sizing:**
 - Faceted figure is `~4.0 in/panel` (≈16 in for 4 across) at a large base font (`fs≈20`) so it
